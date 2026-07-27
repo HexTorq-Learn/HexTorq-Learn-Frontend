@@ -3,9 +3,13 @@ import {
   Activity,
   BarChart3,
   Clock,
+  Edit3,
   Eye,
   ListVideo,
   LogOut,
+  Shield,
+  Trash2,
+  Users,
   Pause,
   Play,
   Plus,
@@ -382,8 +386,302 @@ function Dashboard({ analytics, selectedVideo, heatmap }) {
   );
 }
 
+function AdminUserForm({ onCreated }) {
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STUDENT' });
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+
+    try {
+      await api('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify(form),
+      });
+      setForm({ name: '', email: '', password: '', role: 'STUDENT' });
+      onCreated();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <form className="admin-form" onSubmit={submit}>
+      <input placeholder="User name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+      <input type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
+      <input type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
+      <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
+        <option value="STUDENT">Student</option>
+        <option value="ADMIN">Admin</option>
+      </select>
+      <button className="primary" type="submit">Create user</button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+function AdminVideoRow({ video, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(video.title);
+  const activeSeconds = video.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
+
+  async function save() {
+    await api(`/api/admin/videos/${video.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    });
+    setEditing(false);
+    onChanged();
+  }
+
+  async function remove() {
+    await api(`/api/admin/videos/${video.id}`, { method: 'DELETE' });
+    onChanged();
+  }
+
+  return (
+    <div className="admin-row video-admin-row">
+      <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
+      <div>
+        {editing ? (
+          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        ) : (
+          <strong>{video.title}</strong>
+        )}
+        <span>{video.youtubeId} · {formatTime(activeSeconds)} watched · {video._count.events} events</span>
+      </div>
+      <div className="row-actions">
+        {editing ? (
+          <button className="small-button" onClick={save}>Save</button>
+        ) : (
+          <button className="icon-light" onClick={() => setEditing(true)} title="Edit video"><Edit3 size={16} /></button>
+        )}
+        <button className="icon-light danger" onClick={remove} title="Delete video"><Trash2 size={16} /></button>
+      </div>
+    </div>
+  );
+}
+
+function AdminUserRow({ user, selected, onSelect, onChanged }) {
+  const [role, setRole] = useState(user.role);
+  const activeSeconds = user.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
+
+  async function updateRole(nextRole) {
+    setRole(nextRole);
+    await api(`/api/admin/users/${user.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role: nextRole }),
+    });
+    onChanged();
+  }
+
+  async function remove() {
+    await api(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+    onChanged();
+  }
+
+  return (
+    <div className={selected ? 'admin-row active' : 'admin-row'}>
+      <button className="row-main" onClick={() => onSelect(user)}>
+        <strong>{user.name}</strong>
+        <span>{user.email} · {formatTime(activeSeconds)} · {user._count.sessions} sessions</span>
+      </button>
+      <select value={role} onChange={(event) => updateRole(event.target.value)}>
+        <option value="STUDENT">Student</option>
+        <option value="ADMIN">Admin</option>
+      </select>
+      <button className="icon-light danger" onClick={remove} title="Delete user"><Trash2 size={16} /></button>
+    </div>
+  );
+}
+
+function UserAnalyticsPanel({ userAnalytics }) {
+  const rows = userAnalytics?.summaries || [];
+
+  return (
+    <div className="panel">
+      <div className="panel-title">
+        <BarChart3 size={18} />
+        <h3>{userAnalytics ? `${userAnalytics.user.name} analytics` : 'Select a user'}</h3>
+      </div>
+      {userAnalytics && (
+        <>
+          <div className="stats-grid compact">
+            <Stat icon={Clock} label="Study time" value={formatTime(userAnalytics.totals.activeWatchSeconds)} />
+            <Stat icon={Pause} label="Pauses" value={userAnalytics.totals.pauseCount} />
+            <Stat icon={Rewind} label="Seeks" value={userAnalytics.totals.seekCount} />
+            <Stat icon={Play} label="Sessions" value={userAnalytics.totals.sessionCount} />
+          </div>
+          <div className="admin-table">
+            {rows.map((row) => (
+              <div className="table-row" key={row.id}>
+                <span>{row.date.slice(0, 10)}</span>
+                <strong>{row.video.title}</strong>
+                <span>{formatTime(row.activeWatchSeconds)}</span>
+              </div>
+            ))}
+            {!rows.length && <p className="muted">No analytics for this user yet.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AdminPanel({ auth, onLogout }) {
+  const [tab, setTab] = useState('overview');
+  const [summary, setSummary] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userAnalytics, setUserAnalytics] = useState(null);
+
+  const loadAdmin = useCallback(async () => {
+    const [summaryData, userData, videoData] = await Promise.all([
+      api('/api/admin/summary'),
+      api('/api/admin/users'),
+      api('/api/admin/videos'),
+    ]);
+    setSummary(summaryData);
+    setUsers(userData.users);
+    setVideos(videoData.videos);
+    setSelectedUser((current) => current || userData.users[0] || null);
+  }, []);
+
+  useEffect(() => {
+    loadAdmin().catch(() => {});
+  }, [loadAdmin]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setUserAnalytics(null);
+      return;
+    }
+    api(`/api/admin/analytics/users/${selectedUser.id}`)
+      .then(setUserAnalytics)
+      .catch(() => setUserAnalytics(null));
+  }, [selectedUser]);
+
+  if (auth.user.role !== 'ADMIN') {
+    return (
+      <main className="auth-shell">
+        <section className="auth-panel">
+          <Shield />
+          <h1>Admin access required.</h1>
+          <button className="primary" onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Back to learning</button>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="admin-shell">
+      <header className="admin-header">
+        <div className="brand">
+          <Shield />
+          <div>
+            <strong>HexTorq Learn Admin</strong>
+            <span>{auth.user.email}</span>
+          </div>
+        </div>
+        <nav className="admin-tabs">
+          {['overview', 'users', 'videos', 'analytics'].map((item) => (
+            <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>
+          ))}
+        </nav>
+        <div className="admin-actions">
+          <button className="small-button" onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Learner</button>
+          <button className="logout" onClick={onLogout}><LogOut size={16} /> Logout</button>
+        </div>
+      </header>
+
+      <section className="admin-content">
+        {tab === 'overview' && (
+          <>
+            <div className="stats-grid">
+              <Stat icon={Users} label="Users" value={summary?.userCount || 0} />
+              <Stat icon={ListVideo} label="Videos" value={summary?.videoCount || 0} />
+              <Stat icon={Activity} label="Events" value={summary?.eventCount || 0} />
+              <Stat icon={Clock} label="Total study" value={formatTime(summary?.totals?.activeWatchSeconds || 0)} />
+            </div>
+            <div className="analytics-grid">
+              <div className="panel">
+                <div className="panel-title"><Users size={18} /><h3>Latest users</h3></div>
+                {users.slice(0, 8).map((user) => (
+                  <div className="table-row" key={user.id}>
+                    <strong>{user.name}</strong>
+                    <span>{user.email}</span>
+                    <span>{user.role}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="panel">
+                <div className="panel-title"><ListVideo size={18} /><h3>Latest videos</h3></div>
+                {videos.slice(0, 8).map((video) => (
+                  <div className="table-row" key={video.id}>
+                    <strong>{video.title}</strong>
+                    <span>{video._count.events} events</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === 'users' && (
+          <div className="admin-grid">
+            <div className="panel">
+              <div className="panel-title"><Plus size={18} /><h3>Create user</h3></div>
+              <AdminUserForm onCreated={loadAdmin} />
+            </div>
+            <div className="panel">
+              <div className="panel-title"><Users size={18} /><h3>Manage users</h3></div>
+              <div className="admin-list">
+                {users.map((user) => (
+                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'videos' && (
+          <div className="admin-grid">
+            <div className="panel">
+              <div className="panel-title"><Plus size={18} /><h3>Add video</h3></div>
+              <VideoForm onCreated={loadAdmin} />
+            </div>
+            <div className="panel">
+              <div className="panel-title"><ListVideo size={18} /><h3>Manage videos</h3></div>
+              <div className="admin-list">
+                {videos.map((video) => <AdminVideoRow key={video.id} video={video} onChanged={loadAdmin} />)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'analytics' && (
+          <div className="admin-grid">
+            <div className="panel">
+              <div className="panel-title"><Users size={18} /><h3>All users</h3></div>
+              <div className="admin-list">
+                {users.map((user) => (
+                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} />
+                ))}
+              </div>
+            </div>
+            <UserAnalyticsPanel userAnalytics={userAnalytics} />
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [auth, setAuth] = useState(() => getStoredAuth());
+  const [path, setPath] = useState(() => window.location.pathname);
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [analytics, setAnalytics] = useState(null);
@@ -405,6 +703,12 @@ export default function App() {
   }, [loadData]);
 
   useEffect(() => {
+    const onPopState = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
     if (!selectedVideo) {
       setHeatmap(null);
       return;
@@ -418,6 +722,15 @@ export default function App() {
     return <AuthScreen onAuth={setAuth} />;
   }
 
+  const logout = () => {
+    clearStoredAuth();
+    setAuth(null);
+  };
+
+  if (path === '/admin') {
+    return <AdminPanel auth={auth} onLogout={logout} />;
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -428,11 +741,19 @@ export default function App() {
             <span>{auth.user.name}</span>
           </div>
         </div>
-        <VideoForm onCreated={(video) => {
-          setVideos((items) => [video, ...items.filter((item) => item.id !== video.id)]);
-          setSelectedVideo(video);
-          loadData();
-        }} />
+        {auth.user.role === 'ADMIN' && (
+          <>
+            <button className="admin-link" onClick={() => { window.history.pushState({}, '', '/admin'); window.dispatchEvent(new PopStateEvent('popstate')); }}>
+              <Shield size={16} />
+              Admin panel
+            </button>
+            <VideoForm onCreated={(video) => {
+              setVideos((items) => [video, ...items.filter((item) => item.id !== video.id)]);
+              setSelectedVideo(video);
+              loadData();
+            }} />
+          </>
+        )}
         <div className="video-list">
           <div className="list-heading">
             <ListVideo size={16} />
@@ -449,10 +770,7 @@ export default function App() {
             </button>
           ))}
         </div>
-        <button className="logout" onClick={() => {
-          clearStoredAuth();
-          setAuth(null);
-        }}>
+        <button className="logout" onClick={logout}>
           <LogOut size={16} />
           Logout
         </button>

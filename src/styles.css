@@ -16,7 +16,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -124,6 +125,15 @@ input {
   border-radius: 6px;
   min-height: 42px;
   padding: 0 12px;
+  color: #18202b;
+  background: white;
+}
+
+select {
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 0 10px;
   color: #18202b;
   background: white;
 }
@@ -252,6 +262,19 @@ input {
   background: #f0f3f7;
   color: #4d5969;
   font-weight: 800;
+}
+
+.admin-link {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #1f6f64;
+  border-radius: 6px;
+  background: #edf8f6;
+  color: #1f6f64;
+  font-weight: 900;
 }
 
 .content {
@@ -439,11 +462,200 @@ input {
   color: #18202b;
 }
 
+.admin-shell {
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+.admin-header {
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(240px, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #dde4ee;
+}
+
+.admin-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #edf1f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.admin-tabs button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: transparent;
+  color: #637083;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.admin-tabs button.active {
+  background: white;
+  color: #18202b;
+  box-shadow: 0 1px 4px rgba(24, 32, 43, 0.10);
+}
+
+.admin-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-actions .logout {
+  margin-top: 0;
+  padding: 0 14px;
+}
+
+.admin-content {
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.admin-form {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-list,
+.admin-table {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dde4ee;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.admin-row.active {
+  border-color: #1f6f64;
+  background: #edf8f6;
+}
+
+.video-admin-row {
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+}
+
+.video-admin-row img {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.admin-row strong,
+.admin-row span,
+.table-row strong,
+.table-row span {
+  display: block;
+}
+
+.admin-row span,
+.table-row span {
+  color: #637083;
+  font-size: 13px;
+}
+
+.row-main {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  color: #18202b;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.small-button,
+.icon-light {
+  min-height: 36px;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: white;
+  color: #4d5969;
+  font-weight: 900;
+}
+
+.small-button {
+  padding: 0 12px;
+}
+
+.icon-light {
+  width: 36px;
+  display: grid;
+  place-items: center;
+}
+
+.icon-light.danger {
+  color: #b42318;
+}
+
+.stats-grid.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.stats-grid.compact .stat {
+  padding: 12px;
+}
+
+.stats-grid.compact .stat strong {
+  font-size: 16px;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(180px, 1.4fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
 @media (max-width: 1050px) {
   .app-shell,
   .player-section,
-  .analytics-grid {
+  .analytics-grid,
+  .admin-header,
+  .admin-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-tabs,
+  .admin-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .sidebar {
@@ -473,6 +685,21 @@ input {
 
   .bar-row {
     grid-template-columns: 78px 1fr;
+  }
+
+  .admin-content,
+  .admin-header {
+    padding: 14px;
+  }
+
+  .admin-row,
+  .video-admin-row,
+  .table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid.compact {
+    grid-template-columns: 1fr;
   }
 
   .bar-row strong {
