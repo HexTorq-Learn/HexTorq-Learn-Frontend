@@ -742,6 +742,145 @@ select {
   background: #edf8f6;
 }
 
+.chart-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.chart-title {
+  color: #4d5969;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.mini-bar {
+  display: grid;
+  gap: 6px;
+}
+
+.mini-bar > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.mini-bar span,
+.leader-row em {
+  color: #637083;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.mini-bar > div:last-child {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f6;
+}
+
+.mini-bar i {
+  display: block;
+  height: 100%;
+  background: #1f6f64;
+}
+
+.streak-calendar {
+  display: grid;
+  grid-template-columns: repeat(14, 12px);
+  gap: 5px;
+}
+
+.streak-calendar span,
+.minute-grid span {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: #edf1f6;
+}
+
+.streak-calendar .level-1 { background: #bfe7d8; }
+.streak-calendar .level-2 { background: #80ceb5; }
+.streak-calendar .level-3 { background: #3fa28b; }
+.streak-calendar .level-4 { background: #1f6f64; }
+
+.funnel-list,
+.leaderboard-list,
+.radar-list {
+  display: grid;
+  gap: 10px;
+}
+
+.stacked-bar {
+  display: flex;
+  overflow: hidden;
+  height: 16px;
+  border-radius: 999px;
+  background: #edf1f6;
+}
+
+.stacked-bar i.active,
+.stack-legend i.active { background: #1f6f64; }
+.stacked-bar i.paused,
+.stack-legend i.paused { background: #8aa4c8; }
+.stacked-bar i.idle,
+.stack-legend i.idle { background: #d8a23a; }
+.stacked-bar i.unfocused,
+.stack-legend i.unfocused { background: #c65f5f; }
+
+.stack-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #637083;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stack-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 999px;
+}
+
+.minute-grid {
+  display: grid;
+  grid-template-columns: repeat(15, 12px);
+  gap: 5px;
+}
+
+.minute-grid span {
+  background: color-mix(in srgb, #1f6f64 calc(var(--level) * 80%), #edf1f6);
+}
+
+.leader-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
+.leader-row.current {
+  outline: 2px solid #1f6f64;
+  background: #edf8f6;
+}
+
+.radar-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
 .empty-state {
   min-height: calc(100vh - 48px);
   display: grid;

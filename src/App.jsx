@@ -431,6 +431,124 @@ function MetricCard({ title, value, detail }) {
   );
 }
 
+function MiniBar({ label, value, max, detail }) {
+  return (
+    <div className="mini-bar">
+      <div><strong>{label}</strong><span>{detail}</span></div>
+      <div><i style={{ width: `${Math.min(100, max ? (value / max) * 100 : 0)}%` }} /></div>
+    </div>
+  );
+}
+
+function StreakCalendar({ days = [] }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Study streak calendar</div>
+      <div className="streak-calendar">
+        {days.slice(-70).map((day) => (
+          <span key={day.date} className={`level-${day.level}`} title={`${day.date}: ${formatTime(day.activeWatchSeconds)}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompletionFunnel({ steps = [] }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Completion funnel</div>
+      <div className="funnel-list">
+        {steps.map((step) => <MiniBar key={step.key} label={step.label} value={step.percent} max={100} detail={`${step.count} videos · ${step.percent}%`} />)}
+      </div>
+    </div>
+  );
+}
+
+function FocusIdleStack({ rows = [] }) {
+  const total = Math.max(1, rows.reduce((acc, row) => acc + row.seconds, 0));
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Active vs idle stacked bar</div>
+      <div className="stacked-bar">
+        {rows.map((row) => <i key={row.key} className={row.key} style={{ width: `${(row.seconds / total) * 100}%` }} title={`${row.label}: ${formatTime(row.seconds)}`} />)}
+      </div>
+      <div className="stack-legend">{rows.map((row) => <span key={row.key}><i className={row.key} />{row.label} {formatTime(row.seconds)}</span>)}</div>
+    </div>
+  );
+}
+
+function PlaylistProgressChart({ rows = [] }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Playlist progress</div>
+      <div className="funnel-list">
+        {rows.map((row) => <MiniBar key={row.id} label={row.name} value={row.completionPercent || 0} max={100} detail={`${row.completedVideos}/${row.videoCount} completed`} />)}
+      </div>
+    </div>
+  );
+}
+
+function VideoCompletionList({ rows = [] }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Video completion list</div>
+      <div className="funnel-list">
+        {rows.slice(0, 10).map((row) => <MiniBar key={row.id} label={row.title} value={row.percentWatched} max={100} detail={`${row.percentWatched}% · resume ${formatTime(row.lastWatchedPosition || 0)}`} />)}
+      </div>
+    </div>
+  );
+}
+
+function MinuteDrilldown({ timeMap }) {
+  const [hour, setHour] = useState(() => new Date().getHours());
+  const selected = timeMap?.hours?.find((row) => row.hour === hour);
+  const max = Math.max(1, ...(selected?.seconds || []).map((row) => row.count));
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Minute drilldown heatmap</div>
+      <select value={hour} onChange={(event) => setHour(Number(event.target.value))}>
+        {(timeMap?.hours || []).map((row) => <option key={row.hour} value={row.hour}>{String(row.hour).padStart(2, '0')}:00</option>)}
+      </select>
+      <div className="minute-grid">
+        {(selected?.seconds || []).map((row) => <span key={row.minute} style={{ '--level': row.count / max }} title={`${String(hour).padStart(2, '0')}:${String(row.minute).padStart(2, '0')} · ${row.count} events`} />)}
+      </div>
+    </div>
+  );
+}
+
+function LearnerLeaderboard({ leaderboard = [], currentUserId }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Learner comparison</div>
+      <div className="leaderboard-list">
+        {leaderboard.slice(0, 10).map((row, index) => (
+          <div className={row.userId === currentUserId ? 'leader-row current' : 'leader-row'} key={row.userId}>
+            <strong>#{index + 1}</strong>
+            <span>{row.name}</span>
+            <em>{formatTime(row.activeStudySeconds)} · {row.completionRatePercent}%</em>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RadarBars({ rows = [] }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">User comparison radar</div>
+      <div className="radar-list">
+        {rows.slice(0, 6).map((row) => (
+          <div className="radar-row" key={row.user.id}>
+            <strong>{row.user.name}</strong>
+            {Object.entries(row.radar || {}).map(([key, value]) => <MiniBar key={key} label={key} value={value} max={100} detail={`${Math.round(value)}%`} />)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RangeText({ ranges }) {
   if (!ranges?.length) return 'None';
   return ranges.slice(0, 3).map((range) => `${formatTime(range.start)}-${formatTime(range.end)}`).join(', ');
@@ -495,6 +613,17 @@ function AdvancedAnalytics({ advanced }) {
           {!advanced.alerts?.length && <p className="muted">No alerts right now.</p>}
         </div>
       </div>
+      <div className="panel">
+        <div className="panel-title"><BarChart3 size={18} /><h3>Consistency charts</h3></div>
+        <StreakCalendar days={advanced.charts?.streakCalendar || []} />
+        <CompletionFunnel steps={advanced.charts?.completionFunnel || []} />
+        <FocusIdleStack rows={advanced.charts?.focusIdleStack || []} />
+      </div>
+      <div className="panel">
+        <div className="panel-title"><Folder size={18} /><h3>Course charts</h3></div>
+        <PlaylistProgressChart rows={advanced.charts?.playlistProgress || []} />
+        <VideoCompletionList rows={advanced.charts?.videoCompletionList || []} />
+      </div>
     </section>
   );
 }
@@ -523,7 +652,7 @@ function VideoEtaPanel({ advanced, selectedVideo }) {
   );
 }
 
-function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, liveConnected }) {
+function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, leaderboard, currentUserId, liveConnected }) {
   const summariesByDate = useMemo(() => {
     const rows = {};
     analytics?.summaries?.forEach((summary) => {
@@ -573,6 +702,10 @@ function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, liveC
       <div className="analytics-grid wide">
         <TimeHeatmap timeMap={timeMap} />
         <EventTimeline timeMap={timeMap} />
+      </div>
+      <div className="analytics-grid wide">
+        <div className="panel"><MinuteDrilldown timeMap={timeMap} /></div>
+        <div className="panel"><LearnerLeaderboard leaderboard={leaderboard} currentUserId={currentUserId} /></div>
       </div>
       <AdvancedAnalytics advanced={advanced} />
     </section>
@@ -851,6 +984,34 @@ function AdminPanel({ auth, onLogout }) {
               <div className="panel"><div className="panel-title"><BarChart3 size={18} /><h3>Active study leaderboard</h3></div>{(comparison?.leaderboards?.byActiveStudy || []).slice(0, 8).map((row) => <div className="table-row" key={row.user.id}><strong>{row.user.name}</strong><span>{formatTime(row.activeStudySeconds)}</span><span>{row.completionRatePercent}% complete</span></div>)}</div>
               <div className="panel"><div className="panel-title"><Shield size={18} /><h3>Risk lists</h3></div><div className="metric-grid"><MetricCard title="Inactive" value={comparison?.inactiveUsers?.length || 0} /><MetricCard title="High distraction" value={comparison?.highDistractionUsers?.length || 0} /><MetricCard title="Low completion" value={comparison?.lowCompletionUsers?.length || 0} /><MetricCard title="Stuck users" value={comparison?.stuckUsers?.length || 0} /></div></div>
             </div>
+            <div className="analytics-grid wide">
+              <div className="panel">
+                <div className="panel-title"><Clock size={18} /><h3>All users 24-hour heatmap</h3></div>
+                <div className="hour-grid">
+                  {(comparison?.charts?.allUsers24HourHeatmap || []).map((row) => (
+                    <div className="hour-cell" key={row.hour} style={{ '--level': row.events / Math.max(1, ...(comparison?.charts?.allUsers24HourHeatmap || []).map((item) => item.events)) }}>
+                      <strong>{String(row.hour).padStart(2, '0')}:00</strong>
+                      <span>{row.events} events</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="panel">
+                <div className="panel-title"><BarChart3 size={18} /><h3>Daily active learners</h3></div>
+                <div className="funnel-list">
+                  {(comparison?.charts?.dailyActiveLearners || []).slice(-14).map((row) => <MiniBar key={row.date} label={row.date} value={row.activeUsers} max={Math.max(1, users.length)} detail={`${row.activeUsers} active · ${formatTime(row.totalStudySeconds)}`} />)}
+                </div>
+              </div>
+            </div>
+            <div className="analytics-grid wide">
+              <div className="panel"><RadarBars rows={comparison?.userComparison || []} /></div>
+              <div className="panel">
+                <div className="panel-title"><Users size={18} /><h3>Cohort retention</h3></div>
+                <div className="funnel-list">
+                  {(comparison?.charts?.cohortRetention || []).map((row) => <MiniBar key={row.cohort} label={row.cohort} value={row.users} max={Math.max(1, users.length)} detail={`${row.users} learners`} />)}
+                </div>
+              </div>
+            </div>
           </>
         )}
         {tab === 'users' && (
@@ -893,6 +1054,7 @@ export default function App() {
   const [analytics, setAnalytics] = useState(null);
   const [timeMap, setTimeMap] = useState(null);
   const [advanced, setAdvanced] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
   const [heatmap, setHeatmap] = useState(null);
   const [liveConnected, setLiveConnected] = useState(false);
 
@@ -1036,18 +1198,20 @@ export default function App() {
 
   const loadData = useCallback(async () => {
     if (!auth) return;
-    const [videoData, playlistData, overview, mapData, advancedData] = await Promise.all([
+    const [videoData, playlistData, overview, mapData, advancedData, leaderboardData] = await Promise.all([
       api('/api/videos'),
       api('/api/playlists'),
       api('/api/analytics/overview'),
       api('/api/analytics/time-map'),
       api('/api/analytics/advanced'),
+      api('/api/analytics/leaderboard'),
     ]);
     setVideos(videoData.videos);
     setPlaylists(playlistData.playlists);
     setAnalytics(overview);
     setTimeMap(mapData);
     setAdvanced(advancedData);
+    setLeaderboard(leaderboardData.leaderboard || []);
     setSelectedVideo((current) => current || videoData.videos[0] || null);
   }, [auth]);
 
@@ -1145,7 +1309,7 @@ export default function App() {
         {selectedVideo ? (
           <>
             <LearningPlayer video={selectedVideo} onFlush={loadData} onLocalMetric={applyLocalMetric} />
-            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} advanced={advanced} liveConnected={liveConnected} />
+            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} advanced={advanced} leaderboard={leaderboard} currentUserId={auth.user.id} liveConnected={liveConnected} />
           </>
         ) : (
           <div className="empty-state"><Play size={44} /><h1>Add a YouTube lesson to start tracking.</h1></div>
