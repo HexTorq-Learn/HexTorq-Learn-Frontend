@@ -138,16 +138,22 @@ function LearningPlayer({ video, onFlush }) {
   const [status, setStatus] = useState('Loading');
   const [engaged, setEngaged] = useState(true);
   const [activeSeconds, setActiveSeconds] = useState(0);
+  const [trackingError, setTrackingError] = useState('');
 
   const queueEvent = useCallback((eventType, extra = {}) => {
     const player = playerRef.current;
     const videoTimeSec = player?.getCurrentTime ? player.getCurrentTime() : undefined;
-    eventBuffer.current.push({
+    const event = {
       eventType,
-      videoTimeSec,
       clientTs: new Date().toISOString(),
       ...extra,
-    });
+    };
+
+    if (Number.isFinite(videoTimeSec)) {
+      event.videoTimeSec = videoTimeSec;
+    }
+
+    eventBuffer.current.push(event);
   }, []);
 
   const flush = useCallback(async () => {
@@ -164,13 +170,15 @@ function LearningPlayer({ video, onFlush }) {
         method: 'POST',
         body: JSON.stringify({
           videoId: video.id,
-          sessionId: sessionRef.current,
+          ...(sessionRef.current ? { sessionId: sessionRef.current } : {}),
           events,
           heatmapTicks,
         }),
       });
+      setTrackingError('');
       onFlush?.();
     } catch (error) {
+      setTrackingError(error.message);
       eventBuffer.current.unshift(...events);
       heatmapBuffer.current = Object.entries(heatmapTicks).reduce((acc, [second, count]) => {
         acc[second] = (acc[second] || 0) + count;
@@ -286,6 +294,8 @@ function LearningPlayer({ video, onFlush }) {
       if (!player?.getCurrentTime || !playingRef.current || !engaged) return;
 
       const currentTime = player.getCurrentTime();
+      if (!Number.isFinite(currentTime)) return;
+
       const currentSecond = Math.floor(currentTime);
       const previous = lastTimeRef.current;
 
@@ -324,6 +334,7 @@ function LearningPlayer({ video, onFlush }) {
           <span className="pill">{status}</span>
           <span className="pill">{formatTime(activeSeconds)} active now</span>
         </div>
+        {trackingError && <p className="error">Tracking sync failed: {trackingError}</p>}
       </div>
     </section>
   );
