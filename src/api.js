@@ -26,8 +26,12 @@ export async function api(path, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data.message || `Request failed: ${response.status}`);
+    const details = Array.isArray(data.issues)
+      ? `: ${data.issues.map((issue) => `${issue.path?.join('.') || 'body'} ${issue.message}`).join('; ')}`
+      : '';
+    const error = new Error(`${data.message || `Request failed: ${response.status}`}${details}`);
     error.status = response.status;
+    error.data = data;
 
     if (response.status === 401) {
       clearStoredAuth();

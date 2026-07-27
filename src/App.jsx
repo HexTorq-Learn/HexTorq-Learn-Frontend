@@ -179,11 +179,13 @@ function LearningPlayer({ video, onFlush }) {
       onFlush?.();
     } catch (error) {
       setTrackingError(error.message);
-      eventBuffer.current.unshift(...events);
-      heatmapBuffer.current = Object.entries(heatmapTicks).reduce((acc, [second, count]) => {
-        acc[second] = (acc[second] || 0) + count;
-        return acc;
-      }, heatmapBuffer.current);
+      if (error.status !== 400) {
+        eventBuffer.current.unshift(...events);
+        heatmapBuffer.current = Object.entries(heatmapTicks).reduce((acc, [second, count]) => {
+          acc[second] = (acc[second] || 0) + count;
+          return acc;
+        }, heatmapBuffer.current);
+      }
     }
   }, [onFlush, video]);
 
