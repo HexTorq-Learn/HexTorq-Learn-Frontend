@@ -170,7 +170,7 @@ function PlaylistForm({ onCreated }) {
   );
 }
 
-function LearningPlayer({ video, onFlush }) {
+function LearningPlayer({ video, onFlush, onLocalMetric }) {
   const holderRef = useRef(null);
   const playerRef = useRef(null);
   const sessionRef = useRef(null);
@@ -189,7 +189,8 @@ function LearningPlayer({ video, onFlush }) {
     const event = { eventType, clientTs: new Date().toISOString(), ...extra };
     if (Number.isFinite(currentTime)) event.videoTimeSec = currentTime;
     eventBuffer.current.push(event);
-  }, []);
+    onLocalMetric?.({ type: 'event', eventType, video, videoTimeSec: event.videoTimeSec });
+  }, [onLocalMetric, video]);
 
   const flush = useCallback(async () => {
     if (!video || (!eventBuffer.current.length && !Object.keys(heatmapBuffer.current).length)) return;
@@ -338,6 +339,7 @@ function LearningPlayer({ video, onFlush }) {
       heatmapBuffer.current[currentSecond] = (heatmapBuffer.current[currentSecond] || 0) + 1;
       lastTimeRef.current = currentTime;
       setActiveSeconds((value) => value + 1);
+      onLocalMetric?.({ type: 'tick', video, second: currentSecond });
     }, 1000);
 
     const sync = setInterval(() => {
@@ -349,7 +351,7 @@ function LearningPlayer({ video, onFlush }) {
       clearInterval(tick);
       clearInterval(sync);
     };
-  }, [engaged, flush, queueEvent]);
+  }, [engaged, flush, onLocalMetric, queueEvent, video]);
 
   return (
     <section className="player-section">
@@ -766,6 +768,121 @@ export default function App() {
   const [heatmap, setHeatmap] = useState(null);
   const [liveConnected, setLiveConnected] = useState(false);
 
+  const applyLocalMetric = useCallback((metric) => {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+
+    if (metric.type === 'tick') {
+      setAnalytics((current) => {
+        if (!current) return current;
+        const summaries = [...(current.summaries || [])];
+        const existingIndex = summaries.findIndex((summary) => (
+          summary.videoId === metric.video.id && summary.date?.slice(0, 10) === today
+        ));
+
+        if (existingIndex >= 0) {
+          summaries[existingIndex] = {
+            ...summaries[existingIndex],
+            activeWatchSeconds: summaries[existingIndex].activeWatchSeconds + 1,
+          };
+        } else {
+          summaries.unshift({
+            id: `local-${metric.video.id}-${today}`,
+            userId: auth.user.id,
+            videoId: metric.video.id,
+            video: metric.video,
+            date: `${today}T00:00:00.000Z`,
+            activeWatchSeconds: 1,
+            pauseCount: 0,
+            seekCount: 0,
+            sessionCount: 0,
+          });
+        }
+
+        return {
+          ...current,
+          totals: {
+            ...current.totals,
+            totalActiveSeconds: (current.totals?.totalActiveSeconds || 0) + 1,
+          },
+          summaries,
+        };
+      });
+
+      setHeatmap((current) => {
+        if (!current) return current;
+        const rows = [...(current.heatmap || [])];
+        const existingIndex = rows.findIndex((row) => row.second === metric.second);
+        if (existingIndex >= 0) {
+          rows[existingIndex] = { ...rows[existingIndex], watchCount: rows[existingIndex].watchCount + 1 };
+        } else {
+          rows.push({ id: `local-${metric.video.id}-${metric.second}`, videoId: metric.video.id, second: metric.second, watchCount: 1 });
+        }
+        rows.sort((a, b) => a.second - b.second);
+        return {
+          ...current,
+          heatmap: rows,
+          maxWatchCount: Math.max(current.maxWatchCount || 0, rows[existingIndex >= 0 ? existingIndex : rows.length - 1].watchCount),
+        };
+      });
+    }
+
+    if (metric.type === 'event') {
+      setAnalytics((current) => {
+        if (!current) return current;
+        const pauseDelta = metric.eventType === 'PAUSE' ? 1 : 0;
+        const seekDelta = metric.eventType === 'SEEK' ? 1 : 0;
+        if (!pauseDelta && !seekDelta) return current;
+
+        return {
+          ...current,
+          totals: {
+            ...current.totals,
+            totalPauseCount: (current.totals?.totalPauseCount || 0) + pauseDelta,
+            totalSeekCount: (current.totals?.totalSeekCount || 0) + seekDelta,
+          },
+        };
+      });
+
+      setTimeMap((current) => {
+        if (!current?.hours) return current;
+        const hour = now.getHours();
+        const minute = now.getMinutes();
+        const hours = current.hours.map((bucket) => {
+          if (bucket.hour !== hour) return bucket;
+          return {
+            ...bucket,
+            activeEvents: bucket.activeEvents + 1,
+            playEvents: bucket.playEvents + (metric.eventType === 'PLAY' ? 1 : 0),
+            pauseEvents: bucket.pauseEvents + (metric.eventType === 'PAUSE' ? 1 : 0),
+            seekEvents: bucket.seekEvents + (metric.eventType === 'SEEK' ? 1 : 0),
+            seconds: bucket.seconds.map((entry) => entry.minute === minute ? { ...entry, count: entry.count + 1 } : entry),
+          };
+        });
+
+        return {
+          ...current,
+          hours,
+          timeline: [
+            ...(current.timeline || []),
+            {
+              id: `local-${Date.now()}-${metric.eventType}`,
+              type: metric.eventType,
+              clock: now.toLocaleTimeString('en-GB', { hour12: false }),
+              serverTs: now.toISOString(),
+              videoTimeSec: metric.videoTimeSec,
+              video: {
+                id: metric.video.id,
+                title: metric.video.title,
+                youtubeId: metric.video.youtubeId,
+              },
+            },
+          ].slice(-120),
+        };
+      });
+    }
+  }, [auth]);
+
   const loadData = useCallback(async () => {
     if (!auth) return;
     const [videoData, playlistData, overview, mapData] = await Promise.all([
@@ -874,7 +991,7 @@ export default function App() {
       <section className="content">
         {selectedVideo ? (
           <>
-            <LearningPlayer video={selectedVideo} onFlush={loadData} />
+            <LearningPlayer video={selectedVideo} onFlush={loadData} onLocalMetric={applyLocalMetric} />
             <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} liveConnected={liveConnected} />
           </>
         ) : (
