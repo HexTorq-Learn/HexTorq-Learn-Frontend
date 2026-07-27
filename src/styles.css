@@ -654,6 +654,31 @@ select {
   gap: 10px;
 }
 
+.eta-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.eta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f6;
+}
+
+.progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1f6f64;
+}
+
 .metric-card {
   min-height: 82px;
   display: grid;
@@ -1005,7 +1030,8 @@ select:disabled {
   }
 
   .advanced-grid,
-  .metric-grid {
+  .metric-grid,
+  .eta-grid {
     grid-template-columns: 1fr;
   }
 

@@ -499,6 +499,30 @@ function AdvancedAnalytics({ advanced }) {
   );
 }
 
+function VideoEtaPanel({ advanced, selectedVideo }) {
+  const videoMetric = advanced?.videoCompletion?.find((video) => video.id === selectedVideo?.id);
+  if (!selectedVideo || !videoMetric) return null;
+
+  const remainingSeconds = Math.max(0, videoMetric.durationSec - videoMetric.uniqueWatchedSeconds);
+  const eta = new Date(Date.now() + remainingSeconds * 1000);
+  const etaClock = remainingSeconds > 0 ? eta.toLocaleTimeString('en-GB', { hour12: false }) : 'Complete';
+
+  return (
+    <div className="panel eta-panel">
+      <div className="panel-title"><Clock size={18} /><h3>Expected finish time</h3></div>
+      <div className="eta-grid">
+        <MetricCard title="ETA clock" value={etaClock} detail={remainingSeconds > 0 ? `If you keep watching now` : 'Video target reached'} />
+        <MetricCard title="Remaining" value={formatTime(remainingSeconds)} detail={`${videoMetric.percentWatched}% watched`} />
+        <MetricCard title="Unique watched" value={formatTime(videoMetric.uniqueWatchedSeconds)} detail={`${formatTime(videoMetric.rewatchedSeconds)} rewatched`} />
+        <MetricCard title="Resume point" value={formatTime(videoMetric.lastWatchedPosition || 0)} detail="Last known video position" />
+      </div>
+      <div className="progress-track">
+        <i style={{ width: `${Math.min(100, videoMetric.percentWatched)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, liveConnected }) {
   const summariesByDate = useMemo(() => {
     const rows = {};
@@ -518,6 +542,7 @@ function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, liveC
         <Stat icon={Rewind} label="Seeks / rewinds" value={analytics?.totals?.totalSeekCount || 0} />
         <Stat icon={liveConnected ? Wifi : WifiOff} label="Live metrics" value={liveConnected ? 'Connected' : 'Offline'} />
       </div>
+      <VideoEtaPanel advanced={advanced} selectedVideo={selectedVideo} />
       <div className="analytics-grid wide">
         <div className="panel">
           <div className="panel-title"><BarChart3 size={18} /><h3>Daily activity</h3></div>
@@ -876,6 +901,29 @@ export default function App() {
     const today = now.toISOString().slice(0, 10);
 
     if (metric.type === 'tick') {
+      setAdvanced((current) => {
+        if (!current) return current;
+        const videoCompletion = (current.videoCompletion || []).map((video) => {
+          if (video.id !== metric.video.id) return video;
+          const alreadyWatched = (heatmap?.heatmap || []).some((row) => row.second === metric.second && row.watchCount > 0);
+          const uniqueWatchedSeconds = video.uniqueWatchedSeconds + (alreadyWatched ? 0 : 1);
+          const rewatchedSeconds = video.rewatchedSeconds + (alreadyWatched ? 1 : 0);
+          return {
+            ...video,
+            uniqueWatchedSeconds,
+            rewatchedSeconds,
+            skippedSeconds: Math.max(0, video.durationSec - uniqueWatchedSeconds),
+            percentWatched: Math.min(100, Math.round((uniqueWatchedSeconds / Math.max(1, video.durationSec)) * 100)),
+            lastWatchedPosition: metric.second,
+          };
+        });
+
+        return {
+          ...current,
+          videoCompletion,
+        };
+      });
+
       setAnalytics((current) => {
         if (!current) return current;
         const summaries = [...(current.summaries || [])];
@@ -984,7 +1032,7 @@ export default function App() {
         };
       });
     }
-  }, [auth]);
+  }, [auth, heatmap]);
 
   const loadData = useCallback(async () => {
     if (!auth) return;
