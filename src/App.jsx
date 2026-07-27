@@ -1,0 +1,475 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Activity,
+  BarChart3,
+  Clock,
+  Eye,
+  ListVideo,
+  LogOut,
+  Pause,
+  Play,
+  Plus,
+  Rewind,
+  TimerReset,
+} from 'lucide-react';
+import { api, clearStoredAuth, getStoredAuth, setStoredAuth } from './api.js';
+import { formatTime, groupHeatmapSegments, loadYouTubeApi } from './youtube.js';
+
+const PLAYER_STATES = {
+  [-1]: 'UNSTARTED',
+  0: 'END',
+  1: 'PLAY',
+  2: 'PAUSE',
+  3: 'BUFFER',
+};
+
+function Stat({ icon: Icon, label, value }) {
+  return (
+    <div className="stat">
+      <Icon size={18} />
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+
+    try {
+      const payload = mode === 'register'
+        ? form
+        : { email: form.email, password: form.password };
+      const auth = await api(`/api/auth/${mode}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      setStoredAuth(auth);
+      onAuth(auth);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-panel">
+        <div>
+          <p className="eyebrow">HexTorq Learn</p>
+          <h1>Track real study time from YouTube lessons.</h1>
+        </div>
+        <div className="mode-switch">
+          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Login</button>
+          <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>Register</button>
+        </div>
+        <form onSubmit={submit} className="auth-form">
+          {mode === 'register' && (
+            <label>
+              Name
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+            </label>
+          )}
+          <label>
+            Email
+            <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button className="primary" type="submit">{mode === 'login' ? 'Login' : 'Create account'}</button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function VideoForm({ onCreated }) {
+  const [form, setForm] = useState({ url: '', title: '' });
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+
+    try {
+      const { video } = await api('/api/videos', {
+        method: 'POST',
+        body: JSON.stringify({ url: form.url, title: form.title || undefined }),
+      });
+      setForm({ url: '', title: '' });
+      onCreated(video);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <form className="video-form" onSubmit={submit}>
+      <input placeholder="Paste YouTube link" value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} required />
+      <input placeholder="Title optional" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+      <button className="icon-button" type="submit" title="Add video"><Plus size={18} /></button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+function LearningPlayer({ video, onFlush }) {
+  const holderRef = useRef(null);
+  const playerRef = useRef(null);
+  const sessionRef = useRef(null);
+  const eventBuffer = useRef([]);
+  const heatmapBuffer = useRef({});
+  const playingRef = useRef(false);
+  const lastTimeRef = useRef(null);
+  const [status, setStatus] = useState('Loading');
+  const [engaged, setEngaged] = useState(true);
+  const [activeSeconds, setActiveSeconds] = useState(0);
+
+  const queueEvent = useCallback((eventType, extra = {}) => {
+    const player = playerRef.current;
+    const videoTimeSec = player?.getCurrentTime ? player.getCurrentTime() : undefined;
+    eventBuffer.current.push({
+      eventType,
+      videoTimeSec,
+      clientTs: new Date().toISOString(),
+      ...extra,
+    });
+  }, []);
+
+  const flush = useCallback(async () => {
+    if (!video || (!eventBuffer.current.length && !Object.keys(heatmapBuffer.current).length)) {
+      return;
+    }
+
+    const events = eventBuffer.current.splice(0);
+    const heatmapTicks = { ...heatmapBuffer.current };
+    heatmapBuffer.current = {};
+
+    try {
+      await api('/api/tracking/ingest', {
+        method: 'POST',
+        body: JSON.stringify({
+          videoId: video.id,
+          sessionId: sessionRef.current,
+          events,
+          heatmapTicks,
+        }),
+      });
+      onFlush?.();
+    } catch (error) {
+      eventBuffer.current.unshift(...events);
+      heatmapBuffer.current = Object.entries(heatmapTicks).reduce((acc, [second, count]) => {
+        acc[second] = (acc[second] || 0) + count;
+        return acc;
+      }, heatmapBuffer.current);
+    }
+  }, [onFlush, video]);
+
+  useEffect(() => {
+    let disposed = false;
+    let player;
+
+    async function boot() {
+      const session = await api('/api/tracking/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ videoId: video.id }),
+      });
+      sessionRef.current = session.session.id;
+
+      const YT = await loadYouTubeApi();
+      if (disposed) return;
+
+      player = new YT.Player(holderRef.current, {
+        videoId: video.youtubeId,
+        playerVars: { rel: 0, modestbranding: 1 },
+        events: {
+          onReady: () => setStatus('Ready'),
+          onStateChange: (event) => {
+            const eventType = PLAYER_STATES[event.data];
+            if (!eventType) return;
+            playingRef.current = event.data === 1;
+            setStatus(eventType);
+            queueEvent(eventType);
+          },
+        },
+      });
+      playerRef.current = player;
+    }
+
+    boot();
+
+    return () => {
+      disposed = true;
+      flush();
+      if (sessionRef.current) {
+        api(`/api/tracking/sessions/${sessionRef.current}/end`, { method: 'PATCH' }).catch(() => {});
+      }
+      player?.destroy?.();
+      playerRef.current = null;
+    };
+  }, [flush, queueEvent, video]);
+
+  useEffect(() => {
+    let idleTimer;
+    let outOfFocusTimer;
+    let inactive = false;
+    let outOfFocus = false;
+
+    const markEngaged = () => {
+      inactive = false;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        inactive = true;
+        setEngaged(false);
+        queueEvent('IDLE_START');
+      }, 5 * 60 * 1000);
+      if (!outOfFocus) setEngaged(true);
+    };
+
+    const onBlurOrHidden = (eventType) => {
+      clearTimeout(outOfFocusTimer);
+      outOfFocusTimer = setTimeout(() => {
+        outOfFocus = true;
+        setEngaged(false);
+        queueEvent(eventType);
+      }, 5 * 60 * 1000);
+    };
+
+    const onFocusOrVisible = (eventType) => {
+      clearTimeout(outOfFocusTimer);
+      if (outOfFocus || inactive) queueEvent(eventType);
+      outOfFocus = false;
+      setEngaged(!inactive);
+    };
+
+    const activityEvents = ['mousemove', 'keydown', 'scroll', 'click'];
+    const onWindowBlur = () => onBlurOrHidden('WINDOW_BLUR');
+    const onWindowFocus = () => onFocusOrVisible('WINDOW_FOCUS');
+    const onVisibilityChange = () => {
+      if (document.hidden) onBlurOrHidden('TAB_HIDDEN');
+      else onFocusOrVisible('TAB_VISIBLE');
+    };
+
+    markEngaged();
+    activityEvents.forEach((name) => window.addEventListener(name, markEngaged));
+    window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearTimeout(idleTimer);
+      clearTimeout(outOfFocusTimer);
+      activityEvents.forEach((name) => window.removeEventListener(name, markEngaged));
+      window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [queueEvent]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const player = playerRef.current;
+      if (!player?.getCurrentTime || !playingRef.current || !engaged) return;
+
+      const currentTime = player.getCurrentTime();
+      const currentSecond = Math.floor(currentTime);
+      const previous = lastTimeRef.current;
+
+      if (previous !== null && Math.abs(currentTime - previous - 1) > 2.5) {
+        queueEvent('SEEK', { fromTimeSec: previous, toTimeSec: currentTime });
+      }
+
+      heatmapBuffer.current[currentSecond] = (heatmapBuffer.current[currentSecond] || 0) + 1;
+      lastTimeRef.current = currentTime;
+      setActiveSeconds((value) => value + 1);
+    }, 1000);
+
+    const flushInterval = setInterval(() => {
+      queueEvent('FLUSH');
+      flush();
+    }, 10000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(flushInterval);
+    };
+  }, [engaged, flush, queueEvent]);
+
+  return (
+    <section className="player-section">
+      <div className="player-wrap">
+        <div ref={holderRef} className="player-target" />
+      </div>
+      <div className="player-meta">
+        <div>
+          <p className="eyebrow">Now tracking</p>
+          <h2>{video.title}</h2>
+        </div>
+        <div className="status-row">
+          <span className={engaged ? 'pill good' : 'pill warn'}>{engaged ? 'Counting active study time' : 'Tracking paused for inactivity'}</span>
+          <span className="pill">{status}</span>
+          <span className="pill">{formatTime(activeSeconds)} active now</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ analytics, selectedVideo, heatmap }) {
+  const summariesByDate = useMemo(() => {
+    const rows = {};
+    analytics?.summaries?.forEach((summary) => {
+      const date = summary.date.slice(0, 10);
+      rows[date] = (rows[date] || 0) + summary.activeWatchSeconds;
+    });
+    return Object.entries(rows).slice(0, 14);
+  }, [analytics]);
+
+  const segments = groupHeatmapSegments(heatmap?.heatmap || []);
+
+  return (
+    <section className="dashboard">
+      <div className="stats-grid">
+        <Stat icon={Clock} label="Active study" value={formatTime(analytics?.totals?.totalActiveSeconds || 0)} />
+        <Stat icon={Pause} label="Pauses" value={analytics?.totals?.totalPauseCount || 0} />
+        <Stat icon={Rewind} label="Seeks / rewinds" value={analytics?.totals?.totalSeekCount || 0} />
+        <Stat icon={Eye} label="Repeated frames" value={segments.length} />
+      </div>
+      <div className="analytics-grid">
+        <div className="panel">
+          <div className="panel-title">
+            <BarChart3 size={18} />
+            <h3>Daily activity</h3>
+          </div>
+          <div className="bars">
+            {summariesByDate.map(([date, seconds]) => (
+              <div className="bar-row" key={date}>
+                <span>{date}</span>
+                <div><i style={{ width: `${Math.min(100, seconds / 60)}%` }} /></div>
+                <strong>{formatTime(seconds)}</strong>
+              </div>
+            ))}
+            {!summariesByDate.length && <p className="muted">No watch data yet.</p>}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-title">
+            <TimerReset size={18} />
+            <h3>{selectedVideo ? 'Repeated sections' : 'Video heatmap'}</h3>
+          </div>
+          <div className="segments">
+            {segments.map((segment) => (
+              <div className="segment" key={`${segment.start}-${segment.end}`}>
+                <span>{formatTime(segment.start)} - {formatTime(segment.end)}</span>
+                <strong>{segment.max}x</strong>
+              </div>
+            ))}
+            {!segments.length && <p className="muted">Play and rewind a video to build the heatmap.</p>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function App() {
+  const [auth, setAuth] = useState(() => getStoredAuth());
+  const [videos, setVideos] = useState([]);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [heatmap, setHeatmap] = useState(null);
+
+  const loadData = useCallback(async () => {
+    if (!auth) return;
+    const [videoData, overview] = await Promise.all([
+      api('/api/videos'),
+      api('/api/analytics/overview'),
+    ]);
+    setVideos(videoData.videos);
+    setAnalytics(overview);
+    setSelectedVideo((current) => current || videoData.videos[0] || null);
+  }, [auth]);
+
+  useEffect(() => {
+    loadData().catch(() => {});
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!selectedVideo) {
+      setHeatmap(null);
+      return;
+    }
+    api(`/api/analytics/videos/${selectedVideo.id}/heatmap`)
+      .then(setHeatmap)
+      .catch(() => setHeatmap(null));
+  }, [selectedVideo]);
+
+  if (!auth) {
+    return <AuthScreen onAuth={setAuth} />;
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <Activity />
+          <div>
+            <strong>HexTorq Learn</strong>
+            <span>{auth.user.name}</span>
+          </div>
+        </div>
+        <VideoForm onCreated={(video) => {
+          setVideos((items) => [video, ...items.filter((item) => item.id !== video.id)]);
+          setSelectedVideo(video);
+          loadData();
+        }} />
+        <div className="video-list">
+          <div className="list-heading">
+            <ListVideo size={16} />
+            <span>Videos</span>
+          </div>
+          {videos.map((video) => (
+            <button
+              key={video.id}
+              className={selectedVideo?.id === video.id ? 'video-item active' : 'video-item'}
+              onClick={() => setSelectedVideo(video)}
+            >
+              <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
+              <span>{video.title}</span>
+            </button>
+          ))}
+        </div>
+        <button className="logout" onClick={() => {
+          clearStoredAuth();
+          setAuth(null);
+        }}>
+          <LogOut size={16} />
+          Logout
+        </button>
+      </aside>
+      <section className="content">
+        {selectedVideo ? (
+          <>
+            <LearningPlayer video={selectedVideo} onFlush={loadData} />
+            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} />
+          </>
+        ) : (
+          <div className="empty-state">
+            <Play size={44} />
+            <h1>Add a YouTube lesson to start tracking.</h1>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
