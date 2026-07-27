@@ -2,30 +2,36 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Edit3,
   Eye,
+  Folder,
   ListVideo,
   LogOut,
-  Shield,
-  Trash2,
-  Users,
   Pause,
   Play,
   Plus,
   Rewind,
+  Shield,
   TimerReset,
+  Trash2,
+  Users,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { api, clearStoredAuth, getStoredAuth, setStoredAuth } from './api.js';
 import { formatTime, groupHeatmapSegments, loadYouTubeApi } from './youtube.js';
 
-const PLAYER_STATES = {
-  [-1]: 'UNSTARTED',
-  0: 'END',
-  1: 'PLAY',
-  2: 'PAUSE',
-  3: 'BUFFER',
-};
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const PLAYER_STATES = { [-1]: 'UNSTARTED', 0: 'END', 1: 'PLAY', 2: 'PAUSE', 3: 'BUFFER' };
+
+function navigate(path) {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -49,9 +55,7 @@ function AuthScreen({ onAuth }) {
     setError('');
 
     try {
-      const payload = mode === 'register'
-        ? form
-        : { email: form.email, password: form.password };
+      const payload = mode === 'register' ? form : { email: form.email, password: form.password };
       const auth = await api(`/api/auth/${mode}`, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -97,8 +101,8 @@ function AuthScreen({ onAuth }) {
   );
 }
 
-function VideoForm({ onCreated }) {
-  const [form, setForm] = useState({ url: '', title: '' });
+function VideoForm({ playlists = [], onCreated }) {
+  const [form, setForm] = useState({ url: '', title: '', playlistId: '' });
   const [error, setError] = useState('');
 
   async function submit(event) {
@@ -108,9 +112,13 @@ function VideoForm({ onCreated }) {
     try {
       const { video } = await api('/api/videos', {
         method: 'POST',
-        body: JSON.stringify({ url: form.url, title: form.title || undefined }),
+        body: JSON.stringify({
+          url: form.url,
+          title: form.title || undefined,
+          playlistId: form.playlistId || undefined,
+        }),
       });
-      setForm({ url: '', title: '' });
+      setForm({ url: '', title: '', playlistId: '' });
       onCreated(video);
     } catch (err) {
       setError(err.message);
@@ -118,10 +126,45 @@ function VideoForm({ onCreated }) {
   }
 
   return (
-    <form className="video-form" onSubmit={submit}>
+    <form className="stack-form" onSubmit={submit}>
       <input placeholder="Paste YouTube link" value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} required />
       <input placeholder="Title optional" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
-      <button className="icon-button" type="submit" title="Add video"><Plus size={18} /></button>
+      <select value={form.playlistId} onChange={(event) => setForm({ ...form, playlistId: event.target.value })}>
+        <option value="">No playlist</option>
+        {playlists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+      </select>
+      <button className="primary" type="submit"><Plus size={16} /> Add video</button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+function PlaylistForm({ onCreated }) {
+  const [form, setForm] = useState({ name: '', description: '', color: '#1f6f64' });
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+
+    try {
+      await api('/api/playlists', {
+        method: 'POST',
+        body: JSON.stringify({ ...form, description: form.description || undefined }),
+      });
+      setForm({ name: '', description: '', color: '#1f6f64' });
+      onCreated();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <form className="stack-form" onSubmit={submit}>
+      <input placeholder="Playlist or folder name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+      <input placeholder="Description optional" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+      <input type="color" value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} />
+      <button className="primary" type="submit"><Folder size={16} /> Create playlist</button>
       {error && <p className="error">{error}</p>}
     </form>
   );
@@ -142,24 +185,14 @@ function LearningPlayer({ video, onFlush }) {
 
   const queueEvent = useCallback((eventType, extra = {}) => {
     const player = playerRef.current;
-    const videoTimeSec = player?.getCurrentTime ? player.getCurrentTime() : undefined;
-    const event = {
-      eventType,
-      clientTs: new Date().toISOString(),
-      ...extra,
-    };
-
-    if (Number.isFinite(videoTimeSec)) {
-      event.videoTimeSec = videoTimeSec;
-    }
-
+    const currentTime = player?.getCurrentTime ? player.getCurrentTime() : undefined;
+    const event = { eventType, clientTs: new Date().toISOString(), ...extra };
+    if (Number.isFinite(currentTime)) event.videoTimeSec = currentTime;
     eventBuffer.current.push(event);
   }, []);
 
   const flush = useCallback(async () => {
-    if (!video || (!eventBuffer.current.length && !Object.keys(heatmapBuffer.current).length)) {
-      return;
-    }
+    if (!video || (!eventBuffer.current.length && !Object.keys(heatmapBuffer.current).length)) return;
 
     const events = eventBuffer.current.splice(0);
     const heatmapTicks = { ...heatmapBuffer.current };
@@ -192,6 +225,11 @@ function LearningPlayer({ video, onFlush }) {
   useEffect(() => {
     let disposed = false;
     let player;
+    setActiveSeconds(0);
+    setTrackingError('');
+    lastTimeRef.current = null;
+    eventBuffer.current = [];
+    heatmapBuffer.current = {};
 
     async function boot() {
       const session = await api('/api/tracking/sessions', {
@@ -220,16 +258,15 @@ function LearningPlayer({ video, onFlush }) {
       playerRef.current = player;
     }
 
-    boot();
+    boot().catch((error) => setTrackingError(error.message));
 
     return () => {
       disposed = true;
       flush();
-      if (sessionRef.current) {
-        api(`/api/tracking/sessions/${sessionRef.current}/end`, { method: 'PATCH' }).catch(() => {});
-      }
+      if (sessionRef.current) api(`/api/tracking/sessions/${sessionRef.current}/end`, { method: 'PATCH' }).catch(() => {});
       player?.destroy?.();
       playerRef.current = null;
+      sessionRef.current = null;
     };
   }, [flush, queueEvent, video]);
 
@@ -249,7 +286,6 @@ function LearningPlayer({ video, onFlush }) {
       }, 5 * 60 * 1000);
       if (!outOfFocus) setEngaged(true);
     };
-
     const onBlurOrHidden = (eventType) => {
       clearTimeout(outOfFocusTimer);
       outOfFocusTimer = setTimeout(() => {
@@ -258,21 +294,16 @@ function LearningPlayer({ video, onFlush }) {
         queueEvent(eventType);
       }, 5 * 60 * 1000);
     };
-
     const onFocusOrVisible = (eventType) => {
       clearTimeout(outOfFocusTimer);
       if (outOfFocus || inactive) queueEvent(eventType);
       outOfFocus = false;
       setEngaged(!inactive);
     };
-
     const activityEvents = ['mousemove', 'keydown', 'scroll', 'click'];
     const onWindowBlur = () => onBlurOrHidden('WINDOW_BLUR');
     const onWindowFocus = () => onFocusOrVisible('WINDOW_FOCUS');
-    const onVisibilityChange = () => {
-      if (document.hidden) onBlurOrHidden('TAB_HIDDEN');
-      else onFocusOrVisible('TAB_VISIBLE');
-    };
+    const onVisibilityChange = () => (document.hidden ? onBlurOrHidden('TAB_HIDDEN') : onFocusOrVisible('TAB_VISIBLE'));
 
     markEngaged();
     activityEvents.forEach((name) => window.addEventListener(name, markEngaged));
@@ -291,7 +322,7 @@ function LearningPlayer({ video, onFlush }) {
   }, [queueEvent]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const tick = setInterval(() => {
       const player = playerRef.current;
       if (!player?.getCurrentTime || !playingRef.current || !engaged) return;
 
@@ -300,7 +331,6 @@ function LearningPlayer({ video, onFlush }) {
 
       const currentSecond = Math.floor(currentTime);
       const previous = lastTimeRef.current;
-
       if (previous !== null && Math.abs(currentTime - previous - 1) > 2.5) {
         queueEvent('SEEK', { fromTimeSec: previous, toTimeSec: currentTime });
       }
@@ -310,14 +340,14 @@ function LearningPlayer({ video, onFlush }) {
       setActiveSeconds((value) => value + 1);
     }, 1000);
 
-    const flushInterval = setInterval(() => {
+    const sync = setInterval(() => {
       queueEvent('FLUSH');
       flush();
-    }, 10000);
+    }, 5000);
 
     return () => {
-      clearInterval(interval);
-      clearInterval(flushInterval);
+      clearInterval(tick);
+      clearInterval(sync);
     };
   }, [engaged, flush, queueEvent]);
 
@@ -330,9 +360,10 @@ function LearningPlayer({ video, onFlush }) {
         <div>
           <p className="eyebrow">Now tracking</p>
           <h2>{video.title}</h2>
+          <span className="subtle">{video.playlist?.name || 'No playlist'}</span>
         </div>
         <div className="status-row">
-          <span className={engaged ? 'pill good' : 'pill warn'}>{engaged ? 'Counting active study time' : 'Tracking paused for inactivity'}</span>
+          <span className={engaged ? 'pill good' : 'pill warn'}>{engaged ? 'Counting active study time' : 'Paused for inactivity'}</span>
           <span className="pill">{status}</span>
           <span className="pill">{formatTime(activeSeconds)} active now</span>
         </div>
@@ -342,7 +373,43 @@ function LearningPlayer({ video, onFlush }) {
   );
 }
 
-function Dashboard({ analytics, selectedVideo, heatmap }) {
+function TimeHeatmap({ timeMap }) {
+  const max = Math.max(1, ...(timeMap?.hours || []).map((hour) => hour.activeEvents));
+
+  return (
+    <div className="panel">
+      <div className="panel-title"><Clock size={18} /><h3>24-hour watch heatmap</h3></div>
+      <div className="hour-grid">
+        {(timeMap?.hours || []).map((hour) => (
+          <div className="hour-cell" key={hour.hour} style={{ '--level': hour.activeEvents / max }}>
+            <strong>{String(hour.hour).padStart(2, '0')}:00</strong>
+            <span>{hour.activeEvents} events</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EventTimeline({ timeMap }) {
+  return (
+    <div className="panel">
+      <div className="panel-title"><Activity size={18} /><h3>Clock-time event trail</h3></div>
+      <div className="timeline-list">
+        {(timeMap?.timeline || []).slice().reverse().slice(0, 24).map((event) => (
+          <div className="timeline-row" key={event.id}>
+            <strong>{event.clock}</strong>
+            <span>{event.type}</span>
+            <p>{event.video.title}{Number.isFinite(event.videoTimeSec) ? ` at ${formatTime(event.videoTimeSec)}` : ''}</p>
+          </div>
+        ))}
+        {!timeMap?.timeline?.length && <p className="muted">No clock-time events yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ analytics, selectedVideo, heatmap, timeMap, liveConnected }) {
   const summariesByDate = useMemo(() => {
     const rows = {};
     analytics?.summaries?.forEach((summary) => {
@@ -351,7 +418,6 @@ function Dashboard({ analytics, selectedVideo, heatmap }) {
     });
     return Object.entries(rows).slice(0, 14);
   }, [analytics]);
-
   const segments = groupHeatmapSegments(heatmap?.heatmap || []);
 
   return (
@@ -360,14 +426,11 @@ function Dashboard({ analytics, selectedVideo, heatmap }) {
         <Stat icon={Clock} label="Active study" value={formatTime(analytics?.totals?.totalActiveSeconds || 0)} />
         <Stat icon={Pause} label="Pauses" value={analytics?.totals?.totalPauseCount || 0} />
         <Stat icon={Rewind} label="Seeks / rewinds" value={analytics?.totals?.totalSeekCount || 0} />
-        <Stat icon={Eye} label="Repeated frames" value={segments.length} />
+        <Stat icon={liveConnected ? Wifi : WifiOff} label="Live metrics" value={liveConnected ? 'Connected' : 'Offline'} />
       </div>
-      <div className="analytics-grid">
+      <div className="analytics-grid wide">
         <div className="panel">
-          <div className="panel-title">
-            <BarChart3 size={18} />
-            <h3>Daily activity</h3>
-          </div>
+          <div className="panel-title"><BarChart3 size={18} /><h3>Daily activity</h3></div>
           <div className="bars">
             {summariesByDate.map(([date, seconds]) => (
               <div className="bar-row" key={date}>
@@ -380,10 +443,7 @@ function Dashboard({ analytics, selectedVideo, heatmap }) {
           </div>
         </div>
         <div className="panel">
-          <div className="panel-title">
-            <TimerReset size={18} />
-            <h3>{selectedVideo ? 'Repeated sections' : 'Video heatmap'}</h3>
-          </div>
+          <div className="panel-title"><TimerReset size={18} /><h3>{selectedVideo ? 'Repeated sections' : 'Video heatmap'}</h3></div>
           <div className="segments">
             {segments.map((segment) => (
               <div className="segment" key={`${segment.start}-${segment.end}`}>
@@ -394,6 +454,10 @@ function Dashboard({ analytics, selectedVideo, heatmap }) {
             {!segments.length && <p className="muted">Play and rewind a video to build the heatmap.</p>}
           </div>
         </div>
+      </div>
+      <div className="analytics-grid wide">
+        <TimeHeatmap timeMap={timeMap} />
+        <EventTimeline timeMap={timeMap} />
       </div>
     </section>
   );
@@ -406,12 +470,8 @@ function AdminUserForm({ onCreated }) {
   async function submit(event) {
     event.preventDefault();
     setError('');
-
     try {
-      await api('/api/admin/users', {
-        method: 'POST',
-        body: JSON.stringify(form),
-      });
+      await api('/api/admin/users', { method: 'POST', body: JSON.stringify(form) });
       setForm({ name: '', email: '', password: '', role: 'STUDENT' });
       onCreated();
     } catch (err) {
@@ -420,7 +480,7 @@ function AdminUserForm({ onCreated }) {
   }
 
   return (
-    <form className="admin-form" onSubmit={submit}>
+    <form className="stack-form" onSubmit={submit}>
       <input placeholder="User name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
       <input type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
       <input type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
@@ -434,62 +494,6 @@ function AdminUserForm({ onCreated }) {
   );
 }
 
-function AdminVideoRow({ video, onChanged }) {
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(video.title);
-  const [error, setError] = useState('');
-  const activeSeconds = video.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
-
-  async function save() {
-    setError('');
-
-    try {
-      await api(`/api/admin/videos/${video.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ title }),
-      });
-      setEditing(false);
-      onChanged();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function remove() {
-    setError('');
-
-    try {
-      await api(`/api/admin/videos/${video.id}`, { method: 'DELETE' });
-      onChanged();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  return (
-    <div className="admin-row video-admin-row">
-      <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
-      <div>
-        {editing ? (
-          <input value={title} onChange={(event) => setTitle(event.target.value)} />
-        ) : (
-          <strong>{video.title}</strong>
-        )}
-        <span>{video.youtubeId} · {formatTime(activeSeconds)} watched · {video._count.events} events</span>
-        {error && <span className="row-error">{error}</span>}
-      </div>
-      <div className="row-actions">
-        {editing ? (
-          <button className="small-button" onClick={save}>Save</button>
-        ) : (
-          <button className="icon-light" onClick={() => setEditing(true)} title="Edit video"><Edit3 size={16} /></button>
-        )}
-        <button className="icon-light danger" onClick={remove} title="Delete video"><Trash2 size={16} /></button>
-      </div>
-    </div>
-  );
-}
-
 function AdminUserRow({ user, selected, onSelect, onChanged, currentUserId }) {
   const [role, setRole] = useState(user.role);
   const [error, setError] = useState('');
@@ -500,12 +504,8 @@ function AdminUserRow({ user, selected, onSelect, onChanged, currentUserId }) {
     setError('');
     const previousRole = role;
     setRole(nextRole);
-
     try {
-      await api(`/api/admin/users/${user.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ role: nextRole }),
-      });
+      await api(`/api/admin/users/${user.id}`, { method: 'PATCH', body: JSON.stringify({ role: nextRole }) });
       onChanged();
     } catch (err) {
       setRole(previousRole);
@@ -515,7 +515,6 @@ function AdminUserRow({ user, selected, onSelect, onChanged, currentUserId }) {
 
   async function remove() {
     setError('');
-
     try {
       await api(`/api/admin/users/${user.id}`, { method: 'DELETE' });
       onChanged();
@@ -535,20 +534,70 @@ function AdminUserRow({ user, selected, onSelect, onChanged, currentUserId }) {
         <option value="STUDENT">Student</option>
         <option value="ADMIN">Admin</option>
       </select>
-      <button className="icon-light danger" onClick={remove} disabled={isCurrentUser} title={isCurrentUser ? 'Cannot delete current user' : 'Delete user'}><Trash2 size={16} /></button>
+      <button className="icon-light danger" onClick={remove} disabled={isCurrentUser} title="Delete user"><Trash2 size={16} /></button>
     </div>
   );
 }
 
-function UserAnalyticsPanel({ userAnalytics }) {
+function AdminVideoRow({ video, playlists, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(video.title);
+  const [playlistId, setPlaylistId] = useState(video.playlistId || '');
+  const [error, setError] = useState('');
+  const activeSeconds = video.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
+
+  async function save() {
+    setError('');
+    try {
+      await api(`/api/admin/videos/${video.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title, playlistId: playlistId || null }),
+      });
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function remove() {
+    setError('');
+    try {
+      await api(`/api/admin/videos/${video.id}`, { method: 'DELETE' });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <div className="admin-row video-admin-row">
+      <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
+      <div>
+        {editing ? <input value={title} onChange={(event) => setTitle(event.target.value)} /> : <strong>{video.title}</strong>}
+        <span>{video.playlist?.name || 'No playlist'} · {formatTime(activeSeconds)} watched · {video._count.events} events</span>
+        {editing && (
+          <select value={playlistId} onChange={(event) => setPlaylistId(event.target.value)}>
+            <option value="">No playlist</option>
+            {playlists.map((playlist) => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+          </select>
+        )}
+        {error && <span className="row-error">{error}</span>}
+      </div>
+      <div className="row-actions">
+        {editing ? <button className="small-button" onClick={save}>Save</button> : <button className="icon-light" onClick={() => setEditing(true)} title="Edit video"><Edit3 size={16} /></button>}
+        <button className="icon-light danger" onClick={remove} title="Delete video"><Trash2 size={16} /></button>
+      </div>
+    </div>
+  );
+}
+
+function UserAnalyticsPanel({ userAnalytics, userTimeMap }) {
   const rows = userAnalytics?.summaries || [];
 
   return (
     <div className="panel">
-      <div className="panel-title">
-        <BarChart3 size={18} />
-        <h3>{userAnalytics ? `${userAnalytics.user.name} analytics` : 'Select a user'}</h3>
-      </div>
+      <div className="panel-title"><BarChart3 size={18} /><h3>{userAnalytics ? `${userAnalytics.user.name} analytics` : 'Select a user'}</h3></div>
       {userAnalytics && (
         <>
           <div className="stats-grid compact">
@@ -557,6 +606,7 @@ function UserAnalyticsPanel({ userAnalytics }) {
             <Stat icon={Rewind} label="Seeks" value={userAnalytics.totals.seekCount} />
             <Stat icon={Play} label="Sessions" value={userAnalytics.totals.sessionCount} />
           </div>
+          <TimeHeatmap timeMap={userTimeMap} />
           <div className="admin-table">
             {rows.map((row) => (
               <div className="table-row" key={row.id}>
@@ -565,7 +615,6 @@ function UserAnalyticsPanel({ userAnalytics }) {
                 <span>{formatTime(row.activeWatchSeconds)}</span>
               </div>
             ))}
-            {!rows.length && <p className="muted">No analytics for this user yet.</p>}
           </div>
         </>
       )}
@@ -578,22 +627,25 @@ function AdminPanel({ auth, onLogout }) {
   const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
   const [videos, setVideos] = useState([]);
+  const [playlists, setPlaylists] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userAnalytics, setUserAnalytics] = useState(null);
+  const [userTimeMap, setUserTimeMap] = useState(null);
   const [error, setError] = useState('');
 
   const loadAdmin = useCallback(async () => {
     setError('');
-
     try {
-      const [summaryData, userData, videoData] = await Promise.all([
+      const [summaryData, userData, videoData, playlistData] = await Promise.all([
         api('/api/admin/summary'),
         api('/api/admin/users'),
         api('/api/admin/videos'),
+        api('/api/playlists'),
       ]);
       setSummary(summaryData);
       setUsers(userData.users);
       setVideos(videoData.videos);
+      setPlaylists(playlistData.playlists);
       setSelectedUser((current) => current || userData.users[0] || null);
     } catch (err) {
       setError(err.message);
@@ -601,17 +653,27 @@ function AdminPanel({ auth, onLogout }) {
   }, []);
 
   useEffect(() => {
-    loadAdmin().catch(() => {});
+    loadAdmin();
   }, [loadAdmin]);
 
   useEffect(() => {
     if (!selectedUser) {
       setUserAnalytics(null);
+      setUserTimeMap(null);
       return;
     }
-    api(`/api/admin/analytics/users/${selectedUser.id}`)
-      .then(setUserAnalytics)
-      .catch(() => setUserAnalytics(null));
+    Promise.all([
+      api(`/api/admin/analytics/users/${selectedUser.id}`),
+      api(`/api/admin/analytics/users/${selectedUser.id}/time-map`),
+    ])
+      .then(([analyticsData, timeMapData]) => {
+        setUserAnalytics(analyticsData);
+        setUserTimeMap(timeMapData);
+      })
+      .catch(() => {
+        setUserAnalytics(null);
+        setUserTimeMap(null);
+      });
   }, [selectedUser]);
 
   if (auth.user.role !== 'ADMIN') {
@@ -620,7 +682,7 @@ function AdminPanel({ auth, onLogout }) {
         <section className="auth-panel">
           <Shield />
           <h1>Admin access required.</h1>
-          <button className="primary" onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Back to learning</button>
+          <button className="primary" onClick={() => navigate('/')}>Back to learning</button>
         </section>
       </main>
     );
@@ -637,93 +699,53 @@ function AdminPanel({ auth, onLogout }) {
           </div>
         </div>
         <nav className="admin-tabs">
-          {['overview', 'users', 'videos', 'analytics'].map((item) => (
+          {['overview', 'users', 'playlists', 'videos', 'analytics'].map((item) => (
             <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>
           ))}
         </nav>
         <div className="admin-actions">
-          <button className="small-button" onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Learner</button>
+          <button className="small-button" onClick={() => navigate('/')}>Learner</button>
           <button className="logout" onClick={onLogout}><LogOut size={16} /> Logout</button>
         </div>
       </header>
-
       <section className="admin-content">
         {error && <p className="error banner-error">{error}</p>}
         {tab === 'overview' && (
           <>
             <div className="stats-grid">
               <Stat icon={Users} label="Users" value={summary?.userCount || 0} />
+              <Stat icon={Folder} label="Playlists" value={summary?.playlistCount || 0} />
               <Stat icon={ListVideo} label="Videos" value={summary?.videoCount || 0} />
-              <Stat icon={Activity} label="Events" value={summary?.eventCount || 0} />
               <Stat icon={Clock} label="Total study" value={formatTime(summary?.totals?.activeWatchSeconds || 0)} />
             </div>
-            <div className="analytics-grid">
-              <div className="panel">
-                <div className="panel-title"><Users size={18} /><h3>Latest users</h3></div>
-                {users.slice(0, 8).map((user) => (
-                  <div className="table-row" key={user.id}>
-                    <strong>{user.name}</strong>
-                    <span>{user.email}</span>
-                    <span>{user.role}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="panel">
-                <div className="panel-title"><ListVideo size={18} /><h3>Latest videos</h3></div>
-                {videos.slice(0, 8).map((video) => (
-                  <div className="table-row" key={video.id}>
-                    <strong>{video.title}</strong>
-                    <span>{video._count.events} events</span>
-                  </div>
-                ))}
-              </div>
+            <div className="analytics-grid wide">
+              <div className="panel"><div className="panel-title"><Users size={18} /><h3>Users</h3></div>{users.slice(0, 8).map((user) => <div className="table-row" key={user.id}><strong>{user.name}</strong><span>{user.email}</span><span>{user.role}</span></div>)}</div>
+              <div className="panel"><div className="panel-title"><ListVideo size={18} /><h3>Videos</h3></div>{videos.slice(0, 8).map((video) => <div className="table-row" key={video.id}><strong>{video.title}</strong><span>{video.playlist?.name || 'No playlist'}</span><span>{video._count.events} events</span></div>)}</div>
             </div>
           </>
         )}
-
         {tab === 'users' && (
           <div className="admin-grid">
-            <div className="panel">
-              <div className="panel-title"><Plus size={18} /><h3>Create user</h3></div>
-              <AdminUserForm onCreated={loadAdmin} />
-            </div>
-            <div className="panel">
-              <div className="panel-title"><Users size={18} /><h3>Manage users</h3></div>
-              <div className="admin-list">
-                {users.map((user) => (
-                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />
-                ))}
-              </div>
-            </div>
+            <div className="panel"><div className="panel-title"><Plus size={18} /><h3>Create user</h3></div><AdminUserForm onCreated={loadAdmin} /></div>
+            <div className="panel"><div className="panel-title"><Users size={18} /><h3>Manage users</h3></div><div className="admin-list">{users.map((user) => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />)}</div></div>
           </div>
         )}
-
+        {tab === 'playlists' && (
+          <div className="admin-grid">
+            <div className="panel"><div className="panel-title"><Plus size={18} /><h3>Create playlist</h3></div><PlaylistForm onCreated={loadAdmin} /></div>
+            <div className="panel"><div className="panel-title"><Folder size={18} /><h3>Folders</h3></div><div className="admin-list">{playlists.map((playlist) => <div className="playlist-admin-row" key={playlist.id}><i style={{ background: playlist.color }} /><div><strong>{playlist.name}</strong><span>{playlist.videos.length} videos</span></div></div>)}</div></div>
+          </div>
+        )}
         {tab === 'videos' && (
           <div className="admin-grid">
-            <div className="panel">
-              <div className="panel-title"><Plus size={18} /><h3>Add video</h3></div>
-              <VideoForm onCreated={loadAdmin} />
-            </div>
-            <div className="panel">
-              <div className="panel-title"><ListVideo size={18} /><h3>Manage videos</h3></div>
-              <div className="admin-list">
-                {videos.map((video) => <AdminVideoRow key={video.id} video={video} onChanged={loadAdmin} />)}
-              </div>
-            </div>
+            <div className="panel"><div className="panel-title"><Plus size={18} /><h3>Add video</h3></div><VideoForm playlists={playlists} onCreated={loadAdmin} /></div>
+            <div className="panel"><div className="panel-title"><ListVideo size={18} /><h3>Manage videos</h3></div><div className="admin-list">{videos.map((video) => <AdminVideoRow key={video.id} video={video} playlists={playlists} onChanged={loadAdmin} />)}</div></div>
           </div>
         )}
-
         {tab === 'analytics' && (
           <div className="admin-grid">
-            <div className="panel">
-              <div className="panel-title"><Users size={18} /><h3>All users</h3></div>
-              <div className="admin-list">
-                {users.map((user) => (
-                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />
-                ))}
-              </div>
-            </div>
-            <UserAnalyticsPanel userAnalytics={userAnalytics} />
+            <div className="panel"><div className="panel-title"><Users size={18} /><h3>All users</h3></div><div className="admin-list">{users.map((user) => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />)}</div></div>
+            <UserAnalyticsPanel userAnalytics={userAnalytics} userTimeMap={userTimeMap} />
           </div>
         )}
       </section>
@@ -734,25 +756,57 @@ function AdminPanel({ auth, onLogout }) {
 export default function App() {
   const [auth, setAuth] = useState(() => getStoredAuth());
   const [path, setPath] = useState(() => window.location.pathname);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [videos, setVideos] = useState([]);
+  const [playlists, setPlaylists] = useState([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState('all');
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [timeMap, setTimeMap] = useState(null);
   const [heatmap, setHeatmap] = useState(null);
+  const [liveConnected, setLiveConnected] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!auth) return;
-    const [videoData, overview] = await Promise.all([
+    const [videoData, playlistData, overview, mapData] = await Promise.all([
       api('/api/videos'),
+      api('/api/playlists'),
       api('/api/analytics/overview'),
+      api('/api/analytics/time-map'),
     ]);
     setVideos(videoData.videos);
+    setPlaylists(playlistData.playlists);
     setAnalytics(overview);
+    setTimeMap(mapData);
     setSelectedVideo((current) => current || videoData.videos[0] || null);
   }, [auth]);
 
   useEffect(() => {
     loadData().catch(() => {});
   }, [loadData]);
+
+  useEffect(() => {
+    if (!auth?.token) return undefined;
+    const socket = io(API_BASE, { auth: { token: auth.token } });
+    socket.on('connect', () => setLiveConnected(true));
+    socket.on('disconnect', () => setLiveConnected(false));
+    socket.on('metrics:update', ({ overview, timeMap: nextTimeMap }) => {
+      setAnalytics(overview);
+      setTimeMap(nextTimeMap);
+      if (selectedVideo) {
+        api(`/api/analytics/videos/${selectedVideo.id}/heatmap`).then(setHeatmap).catch(() => {});
+      }
+    });
+    return () => socket.disconnect();
+  }, [auth, selectedVideo]);
+
+  useEffect(() => {
+    if (!selectedVideo) {
+      setHeatmap(null);
+      return;
+    }
+    api(`/api/analytics/videos/${selectedVideo.id}/heatmap`).then(setHeatmap).catch(() => setHeatmap(null));
+  }, [selectedVideo]);
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
@@ -765,31 +819,23 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!selectedVideo) {
-      setHeatmap(null);
-      return;
-    }
-    api(`/api/analytics/videos/${selectedVideo.id}/heatmap`)
-      .then(setHeatmap)
-      .catch(() => setHeatmap(null));
-  }, [selectedVideo]);
-
-  if (!auth) {
-    return <AuthScreen onAuth={setAuth} />;
-  }
+  if (!auth) return <AuthScreen onAuth={setAuth} />;
 
   const logout = () => {
     clearStoredAuth();
     setAuth(null);
   };
 
-  if (path === '/admin') {
-    return <AdminPanel auth={auth} onLogout={logout} />;
-  }
+  if (path === '/admin') return <AdminPanel auth={auth} onLogout={logout} />;
+
+  const groupedVideos = selectedPlaylistId === 'all'
+    ? videos
+    : selectedPlaylistId === 'none'
+      ? videos.filter((video) => !video.playlistId)
+      : videos.filter((video) => video.playlistId === selectedPlaylistId);
 
   return (
-    <main className="app-shell">
+    <main className={sidebarOpen ? 'app-shell' : 'app-shell collapsed'}>
       <aside className="sidebar">
         <div className="brand">
           <Activity />
@@ -798,51 +844,41 @@ export default function App() {
             <span>{auth.user.name}</span>
           </div>
         </div>
+        <button className="collapse-button" onClick={() => setSidebarOpen((value) => !value)} title="Toggle sidebar">
+          {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        </button>
         {auth.user.role === 'ADMIN' && (
-          <>
-            <button className="admin-link" onClick={() => { window.history.pushState({}, '', '/admin'); window.dispatchEvent(new PopStateEvent('popstate')); }}>
-              <Shield size={16} />
-              Admin panel
-            </button>
-            <VideoForm onCreated={(video) => {
-              setVideos((items) => [video, ...items.filter((item) => item.id !== video.id)]);
-              setSelectedVideo(video);
-              loadData();
-            }} />
-          </>
+          <button className="admin-link" onClick={() => navigate('/admin')}><Shield size={16} /><span>Admin panel</span></button>
         )}
+        <div className="sidebar-section">
+          <div className="list-heading"><Folder size={16} /><span>Playlists</span></div>
+          <button className={selectedPlaylistId === 'all' ? 'playlist-button active' : 'playlist-button'} onClick={() => setSelectedPlaylistId('all')}><i /> <span>All videos</span><strong>{videos.length}</strong></button>
+          {playlists.map((playlist) => (
+            <button key={playlist.id} className={selectedPlaylistId === playlist.id ? 'playlist-button active' : 'playlist-button'} onClick={() => setSelectedPlaylistId(playlist.id)}>
+              <i style={{ background: playlist.color }} /><span>{playlist.name}</span><strong>{playlist.videos.length}</strong>
+            </button>
+          ))}
+          <button className={selectedPlaylistId === 'none' ? 'playlist-button active' : 'playlist-button'} onClick={() => setSelectedPlaylistId('none')}><i /> <span>No playlist</span><strong>{videos.filter((video) => !video.playlistId).length}</strong></button>
+        </div>
         <div className="video-list">
-          <div className="list-heading">
-            <ListVideo size={16} />
-            <span>Videos</span>
-          </div>
-          {videos.map((video) => (
-            <button
-              key={video.id}
-              className={selectedVideo?.id === video.id ? 'video-item active' : 'video-item'}
-              onClick={() => setSelectedVideo(video)}
-            >
+          <div className="list-heading"><ListVideo size={16} /><span>Videos</span></div>
+          {groupedVideos.map((video) => (
+            <button key={video.id} className={selectedVideo?.id === video.id ? 'video-item active' : 'video-item'} onClick={() => setSelectedVideo(video)}>
               <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
               <span>{video.title}</span>
             </button>
           ))}
         </div>
-        <button className="logout" onClick={logout}>
-          <LogOut size={16} />
-          Logout
-        </button>
+        <button className="logout" onClick={logout}><LogOut size={16} /><span>Logout</span></button>
       </aside>
       <section className="content">
         {selectedVideo ? (
           <>
             <LearningPlayer video={selectedVideo} onFlush={loadData} />
-            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} />
+            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} liveConnected={liveConnected} />
           </>
         ) : (
-          <div className="empty-state">
-            <Play size={44} />
-            <h1>Add a YouTube lesson to start tracking.</h1>
-          </div>
+          <div className="empty-state"><Play size={44} /><h1>Add a YouTube lesson to start tracking.</h1></div>
         )}
       </section>
     </main>
