@@ -642,6 +642,81 @@ select {
   white-space: nowrap;
 }
 
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  min-height: 82px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
+.metric-card span,
+.metric-card p {
+  margin: 0;
+  color: #637083;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.metric-card strong {
+  color: #18202b;
+  font-size: 20px;
+}
+
+.insight-list,
+.alert-list {
+  display: grid;
+  gap: 10px;
+}
+
+.insight-list div,
+.alert-row {
+  display: grid;
+  gap: 3px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
+.insight-list strong,
+.alert-row strong {
+  color: #18202b;
+  font-size: 13px;
+}
+
+.insight-list span,
+.alert-row span {
+  color: #637083;
+  font-size: 13px;
+}
+
+.alert-row.high {
+  background: #fff1f0;
+}
+
+.alert-row.medium {
+  background: #fff8e6;
+}
+
+.alert-row.low {
+  background: #edf8f6;
+}
+
 .empty-state {
   min-height: calc(100vh - 48px);
   display: grid;
@@ -926,6 +1001,11 @@ select:disabled {
   }
 
   .timeline-row {
+    grid-template-columns: 1fr;
+  }
+
+  .advanced-grid,
+  .metric-grid {
     grid-template-columns: 1fr;
   }
 

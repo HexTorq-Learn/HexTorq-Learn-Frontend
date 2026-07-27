@@ -186,7 +186,17 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
   const queueEvent = useCallback((eventType, extra = {}) => {
     const player = playerRef.current;
     const currentTime = player?.getCurrentTime ? player.getCurrentTime() : undefined;
-    const event = { eventType, clientTs: new Date().toISOString(), ...extra };
+    const playbackRate = player?.getPlaybackRate ? player.getPlaybackRate() : undefined;
+    const event = {
+      eventType,
+      clientTs: new Date().toISOString(),
+      metadata: {
+        ...(Number.isFinite(playbackRate) ? { playbackRate } : {}),
+        documentHidden: document.hidden,
+        windowFocused: document.hasFocus(),
+      },
+      ...extra,
+    };
     if (Number.isFinite(currentTime)) event.videoTimeSec = currentTime;
     eventBuffer.current.push(event);
     onLocalMetric?.({ type: 'event', eventType, video, videoTimeSec: event.videoTimeSec });
@@ -411,7 +421,85 @@ function EventTimeline({ timeMap }) {
   );
 }
 
-function Dashboard({ analytics, selectedVideo, heatmap, timeMap, liveConnected }) {
+function MetricCard({ title, value, detail }) {
+  return (
+    <div className="metric-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      {detail && <p>{detail}</p>}
+    </div>
+  );
+}
+
+function RangeText({ ranges }) {
+  if (!ranges?.length) return 'None';
+  return ranges.slice(0, 3).map((range) => `${formatTime(range.start)}-${formatTime(range.end)}`).join(', ');
+}
+
+function AdvancedAnalytics({ advanced }) {
+  if (!advanced) return null;
+
+  const hardest = [...(advanced.rewatchDifficulty || [])].sort((a, b) => b.hardTopicScore - a.hardTopicScore)[0];
+  const playlist = [...(advanced.playlistMetrics || [])].sort((a, b) => b.activeWatchSeconds - a.activeWatchSeconds)[0];
+  const bestVideo = [...(advanced.videoCompletion || [])].sort((a, b) => b.percentWatched - a.percentWatched)[0];
+
+  return (
+    <section className="advanced-grid">
+      <div className="panel">
+        <div className="panel-title"><Activity size={18} /><h3>Learning quality</h3></div>
+        <div className="metric-grid">
+          <MetricCard title="Efficiency" value={`${advanced.learningTime.studyEfficiencyPercent}%`} detail="Active study / tab-open time" />
+          <MetricCard title="Focused time" value={formatTime(advanced.learningTime.focusedSeconds)} detail={`${formatTime(advanced.learningTime.unfocusedSeconds)} unfocused`} />
+          <MetricCard title="Idle time" value={formatTime(advanced.learningTime.idleSeconds)} detail={`${advanced.sessionQuality.idleTriggerCount} idle triggers`} />
+          <MetricCard title="Study streak" value={`${advanced.learningTime.studyStreakDays} days`} detail={`Best hour ${advanced.learningTime.bestStudyHour || '--'}`} />
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title"><ListVideo size={18} /><h3>Progress</h3></div>
+        <div className="metric-grid">
+          <MetricCard title="Completed" value={advanced.learningProgress.completedVideos} detail={`${advanced.learningProgress.partiallyWatchedVideos} partial, ${advanced.learningProgress.unstartedVideos} unstarted`} />
+          <MetricCard title="Remaining" value={formatTime(advanced.learningProgress.remainingVideoSeconds)} detail="Estimated video time left" />
+          <MetricCard title="Today delta" value={formatTime(Math.abs(advanced.learningProgress.todayVsYesterday.deltaSeconds))} detail={advanced.learningProgress.todayVsYesterday.deltaSeconds >= 0 ? 'More than yesterday' : 'Less than yesterday'} />
+          <MetricCard title="Target" value={`${advanced.learningProgress.watchTargetCompletionPercent}%`} detail="Of 1 hour daily target" />
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title"><TimerReset size={18} /><h3>Difficulty signals</h3></div>
+        <div className="insight-list">
+          <div><strong>{hardest?.title || 'No video yet'}</strong><span>Hard-topic score {hardest?.hardTopicScore || 0}</span></div>
+          <div><strong>Repeated 5x</strong><span>{RangeText(hardest?.repeated5xRanges)}</span></div>
+          <div><strong>Most replayed</strong><span>{hardest?.mostReplayedSecond ? `${formatTime(hardest.mostReplayedSecond.second)} · ${hardest.mostReplayedSecond.watchCount}x` : 'None'}</span></div>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title"><Folder size={18} /><h3>Playlist performance</h3></div>
+        <div className="insight-list">
+          <div><strong>{playlist?.name || 'No playlist'}</strong><span>{playlist?.completionPercent || 0}% complete · {formatTime(playlist?.activeWatchSeconds || 0)}</span></div>
+          <div><strong>Best video</strong><span>{bestVideo?.title || 'No watched video'} · {bestVideo?.percentWatched || 0}%</span></div>
+          <div><strong>Completion ETA</strong><span>{advanced.learningProgress.estimatedCourseCompletionDays ? `${advanced.learningProgress.estimatedCourseCompletionDays} days` : 'Needs more data'}</span></div>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title"><Eye size={18} /><h3>Behavior</h3></div>
+        <div className="metric-grid">
+          <MetricCard title="Pause/min" value={advanced.behavior.pauseFrequencyPerMinute} />
+          <MetricCard title="Seek/min" value={advanced.behavior.seekFrequencyPerMinute} />
+          <MetricCard title="Tab switches" value={advanced.behavior.tabSwitchingFrequency} />
+          <MetricCard title="Avg gap" value={formatTime(advanced.behavior.averageSecondsBetweenInteractions)} />
+        </div>
+      </div>
+      <div className="panel">
+        <div className="panel-title"><Shield size={18} /><h3>Alerts</h3></div>
+        <div className="alert-list">
+          {(advanced.alerts || []).slice(0, 8).map((alert) => <div className={`alert-row ${alert.severity}`} key={`${alert.type}-${alert.message}`}><strong>{alert.severity}</strong><span>{alert.message}</span></div>)}
+          {!advanced.alerts?.length && <p className="muted">No alerts right now.</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, liveConnected }) {
   const summariesByDate = useMemo(() => {
     const rows = {};
     analytics?.summaries?.forEach((summary) => {
@@ -461,6 +549,7 @@ function Dashboard({ analytics, selectedVideo, heatmap, timeMap, liveConnected }
         <TimeHeatmap timeMap={timeMap} />
         <EventTimeline timeMap={timeMap} />
       </div>
+      <AdvancedAnalytics advanced={advanced} />
     </section>
   );
 }
@@ -594,7 +683,7 @@ function AdminVideoRow({ video, playlists, onChanged }) {
   );
 }
 
-function UserAnalyticsPanel({ userAnalytics, userTimeMap }) {
+function UserAnalyticsPanel({ userAnalytics, userTimeMap, advanced }) {
   const rows = userAnalytics?.summaries || [];
 
   return (
@@ -609,6 +698,7 @@ function UserAnalyticsPanel({ userAnalytics, userTimeMap }) {
             <Stat icon={Play} label="Sessions" value={userAnalytics.totals.sessionCount} />
           </div>
           <TimeHeatmap timeMap={userTimeMap} />
+          <AdvancedAnalytics advanced={advanced} />
           <div className="admin-table">
             {rows.map((row) => (
               <div className="table-row" key={row.id}>
@@ -633,21 +723,25 @@ function AdminPanel({ auth, onLogout }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userAnalytics, setUserAnalytics] = useState(null);
   const [userTimeMap, setUserTimeMap] = useState(null);
+  const [userAdvanced, setUserAdvanced] = useState(null);
+  const [comparison, setComparison] = useState(null);
   const [error, setError] = useState('');
 
   const loadAdmin = useCallback(async () => {
     setError('');
     try {
-      const [summaryData, userData, videoData, playlistData] = await Promise.all([
+      const [summaryData, userData, videoData, playlistData, comparisonData] = await Promise.all([
         api('/api/admin/summary'),
         api('/api/admin/users'),
         api('/api/admin/videos'),
         api('/api/playlists'),
+        api('/api/admin/analytics/comparison'),
       ]);
       setSummary(summaryData);
       setUsers(userData.users);
       setVideos(videoData.videos);
       setPlaylists(playlistData.playlists);
+      setComparison(comparisonData);
       setSelectedUser((current) => current || userData.users[0] || null);
     } catch (err) {
       setError(err.message);
@@ -662,19 +756,23 @@ function AdminPanel({ auth, onLogout }) {
     if (!selectedUser) {
       setUserAnalytics(null);
       setUserTimeMap(null);
+      setUserAdvanced(null);
       return;
     }
     Promise.all([
       api(`/api/admin/analytics/users/${selectedUser.id}`),
       api(`/api/admin/analytics/users/${selectedUser.id}/time-map`),
+      api(`/api/admin/analytics/users/${selectedUser.id}/advanced`),
     ])
-      .then(([analyticsData, timeMapData]) => {
+      .then(([analyticsData, timeMapData, advancedData]) => {
         setUserAnalytics(analyticsData);
         setUserTimeMap(timeMapData);
+        setUserAdvanced(advancedData);
       })
       .catch(() => {
         setUserAnalytics(null);
         setUserTimeMap(null);
+        setUserAdvanced(null);
       });
   }, [selectedUser]);
 
@@ -724,6 +822,10 @@ function AdminPanel({ auth, onLogout }) {
               <div className="panel"><div className="panel-title"><Users size={18} /><h3>Users</h3></div>{users.slice(0, 8).map((user) => <div className="table-row" key={user.id}><strong>{user.name}</strong><span>{user.email}</span><span>{user.role}</span></div>)}</div>
               <div className="panel"><div className="panel-title"><ListVideo size={18} /><h3>Videos</h3></div>{videos.slice(0, 8).map((video) => <div className="table-row" key={video.id}><strong>{video.title}</strong><span>{video.playlist?.name || 'No playlist'}</span><span>{video._count.events} events</span></div>)}</div>
             </div>
+            <div className="analytics-grid wide">
+              <div className="panel"><div className="panel-title"><BarChart3 size={18} /><h3>Active study leaderboard</h3></div>{(comparison?.leaderboards?.byActiveStudy || []).slice(0, 8).map((row) => <div className="table-row" key={row.user.id}><strong>{row.user.name}</strong><span>{formatTime(row.activeStudySeconds)}</span><span>{row.completionRatePercent}% complete</span></div>)}</div>
+              <div className="panel"><div className="panel-title"><Shield size={18} /><h3>Risk lists</h3></div><div className="metric-grid"><MetricCard title="Inactive" value={comparison?.inactiveUsers?.length || 0} /><MetricCard title="High distraction" value={comparison?.highDistractionUsers?.length || 0} /><MetricCard title="Low completion" value={comparison?.lowCompletionUsers?.length || 0} /><MetricCard title="Stuck users" value={comparison?.stuckUsers?.length || 0} /></div></div>
+            </div>
           </>
         )}
         {tab === 'users' && (
@@ -747,7 +849,7 @@ function AdminPanel({ auth, onLogout }) {
         {tab === 'analytics' && (
           <div className="admin-grid">
             <div className="panel"><div className="panel-title"><Users size={18} /><h3>All users</h3></div><div className="admin-list">{users.map((user) => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />)}</div></div>
-            <UserAnalyticsPanel userAnalytics={userAnalytics} userTimeMap={userTimeMap} />
+            <UserAnalyticsPanel userAnalytics={userAnalytics} userTimeMap={userTimeMap} advanced={userAdvanced} />
           </div>
         )}
       </section>
@@ -765,6 +867,7 @@ export default function App() {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [timeMap, setTimeMap] = useState(null);
+  const [advanced, setAdvanced] = useState(null);
   const [heatmap, setHeatmap] = useState(null);
   const [liveConnected, setLiveConnected] = useState(false);
 
@@ -885,16 +988,18 @@ export default function App() {
 
   const loadData = useCallback(async () => {
     if (!auth) return;
-    const [videoData, playlistData, overview, mapData] = await Promise.all([
+    const [videoData, playlistData, overview, mapData, advancedData] = await Promise.all([
       api('/api/videos'),
       api('/api/playlists'),
       api('/api/analytics/overview'),
       api('/api/analytics/time-map'),
+      api('/api/analytics/advanced'),
     ]);
     setVideos(videoData.videos);
     setPlaylists(playlistData.playlists);
     setAnalytics(overview);
     setTimeMap(mapData);
+    setAdvanced(advancedData);
     setSelectedVideo((current) => current || videoData.videos[0] || null);
   }, [auth]);
 
@@ -992,7 +1097,7 @@ export default function App() {
         {selectedVideo ? (
           <>
             <LearningPlayer video={selectedVideo} onFlush={loadData} onLocalMetric={applyLocalMetric} />
-            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} liveConnected={liveConnected} />
+            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} advanced={advanced} liveConnected={liveConnected} />
           </>
         ) : (
           <div className="empty-state"><Play size={44} /><h1>Add a YouTube lesson to start tracking.</h1></div>
