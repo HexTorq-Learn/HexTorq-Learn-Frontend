@@ -868,6 +868,13 @@ select {
   background: #f5f7fb;
 }
 
+.leader-row small {
+  display: block;
+  color: #7a8798;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .leader-row.current {
   outline: 2px solid #1f6f64;
   background: #edf8f6;
@@ -879,6 +886,44 @@ select {
   padding: 10px;
   border-radius: 6px;
   background: #f5f7fb;
+}
+
+.game-profile {
+  display: grid;
+  gap: 12px;
+}
+
+.game-profile span,
+.game-profile p {
+  margin: 0;
+  color: #637083;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.game-profile strong {
+  display: block;
+  margin-top: 4px;
+  color: #18202b;
+  font-size: 28px;
+}
+
+.badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge-list span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #edf8f6;
+  color: #1f6f64;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .empty-state {

@@ -524,8 +524,8 @@ function LearnerLeaderboard({ leaderboard = [], currentUserId }) {
         {leaderboard.slice(0, 10).map((row, index) => (
           <div className={row.userId === currentUserId ? 'leader-row current' : 'leader-row'} key={row.userId}>
             <strong>#{index + 1}</strong>
-            <span>{row.name}</span>
-            <em>{formatTime(row.activeStudySeconds)} · {row.completionRatePercent}%</em>
+            <span>{row.name}<small>{row.publicLearnerId}</small></span>
+            <em>Lv {row.level} · {row.xp} XP · {formatTime(row.activeStudySeconds)}</em>
           </div>
         ))}
       </div>
@@ -563,6 +563,21 @@ function AdvancedAnalytics({ advanced }) {
 
   return (
     <section className="advanced-grid">
+      <div className="panel">
+        <div className="panel-title"><Shield size={18} /><h3>Game profile</h3></div>
+        <div className="game-profile">
+          <div>
+            <span>{advanced.game?.publicLearnerId}</span>
+            <strong>Level {advanced.game?.level || 1}</strong>
+            <p>{advanced.game?.xp || 0} XP · {advanced.game?.levelProgressPercent || 0}% to next level</p>
+          </div>
+          <div className="progress-track"><i style={{ width: `${advanced.game?.levelProgressPercent || 0}%` }} /></div>
+          <div className="badge-list">
+            {(advanced.game?.badges || []).map((badge) => <span key={badge.key}>{badge.label}</span>)}
+            {!advanced.game?.badges?.length && <span>Start learning to unlock badges</span>}
+          </div>
+        </div>
+      </div>
       <div className="panel">
         <div className="panel-title"><Activity size={18} /><h3>Learning quality</h3></div>
         <div className="metric-grid">
