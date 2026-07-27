@@ -424,20 +424,33 @@ function AdminUserForm({ onCreated }) {
 function AdminVideoRow({ video, onChanged }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(video.title);
+  const [error, setError] = useState('');
   const activeSeconds = video.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
 
   async function save() {
-    await api(`/api/admin/videos/${video.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title }),
-    });
-    setEditing(false);
-    onChanged();
+    setError('');
+
+    try {
+      await api(`/api/admin/videos/${video.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      });
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function remove() {
-    await api(`/api/admin/videos/${video.id}`, { method: 'DELETE' });
-    onChanged();
+    setError('');
+
+    try {
+      await api(`/api/admin/videos/${video.id}`, { method: 'DELETE' });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   return (
@@ -450,6 +463,7 @@ function AdminVideoRow({ video, onChanged }) {
           <strong>{video.title}</strong>
         )}
         <span>{video.youtubeId} · {formatTime(activeSeconds)} watched · {video._count.events} events</span>
+        {error && <span className="row-error">{error}</span>}
       </div>
       <div className="row-actions">
         {editing ? (
@@ -463,35 +477,52 @@ function AdminVideoRow({ video, onChanged }) {
   );
 }
 
-function AdminUserRow({ user, selected, onSelect, onChanged }) {
+function AdminUserRow({ user, selected, onSelect, onChanged, currentUserId }) {
   const [role, setRole] = useState(user.role);
+  const [error, setError] = useState('');
+  const isCurrentUser = user.id === currentUserId;
   const activeSeconds = user.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
 
   async function updateRole(nextRole) {
+    setError('');
+    const previousRole = role;
     setRole(nextRole);
-    await api(`/api/admin/users/${user.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ role: nextRole }),
-    });
-    onChanged();
+
+    try {
+      await api(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: nextRole }),
+      });
+      onChanged();
+    } catch (err) {
+      setRole(previousRole);
+      setError(err.message);
+    }
   }
 
   async function remove() {
-    await api(`/api/admin/users/${user.id}`, { method: 'DELETE' });
-    onChanged();
+    setError('');
+
+    try {
+      await api(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   return (
     <div className={selected ? 'admin-row active' : 'admin-row'}>
       <button className="row-main" onClick={() => onSelect(user)}>
         <strong>{user.name}</strong>
-        <span>{user.email} · {formatTime(activeSeconds)} · {user._count.sessions} sessions</span>
+        <span>{user.email} · {formatTime(activeSeconds)} · {user._count.sessions} sessions{isCurrentUser ? ' · current admin' : ''}</span>
+        {error && <span className="row-error">{error}</span>}
       </button>
-      <select value={role} onChange={(event) => updateRole(event.target.value)}>
+      <select value={role} onChange={(event) => updateRole(event.target.value)} disabled={isCurrentUser}>
         <option value="STUDENT">Student</option>
         <option value="ADMIN">Admin</option>
       </select>
-      <button className="icon-light danger" onClick={remove} title="Delete user"><Trash2 size={16} /></button>
+      <button className="icon-light danger" onClick={remove} disabled={isCurrentUser} title={isCurrentUser ? 'Cannot delete current user' : 'Delete user'}><Trash2 size={16} /></button>
     </div>
   );
 }
@@ -536,17 +567,24 @@ function AdminPanel({ auth, onLogout }) {
   const [videos, setVideos] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userAnalytics, setUserAnalytics] = useState(null);
+  const [error, setError] = useState('');
 
   const loadAdmin = useCallback(async () => {
-    const [summaryData, userData, videoData] = await Promise.all([
-      api('/api/admin/summary'),
-      api('/api/admin/users'),
-      api('/api/admin/videos'),
-    ]);
-    setSummary(summaryData);
-    setUsers(userData.users);
-    setVideos(videoData.videos);
-    setSelectedUser((current) => current || userData.users[0] || null);
+    setError('');
+
+    try {
+      const [summaryData, userData, videoData] = await Promise.all([
+        api('/api/admin/summary'),
+        api('/api/admin/users'),
+        api('/api/admin/videos'),
+      ]);
+      setSummary(summaryData);
+      setUsers(userData.users);
+      setVideos(videoData.videos);
+      setSelectedUser((current) => current || userData.users[0] || null);
+    } catch (err) {
+      setError(err.message);
+    }
   }, []);
 
   useEffect(() => {
@@ -597,6 +635,7 @@ function AdminPanel({ auth, onLogout }) {
       </header>
 
       <section className="admin-content">
+        {error && <p className="error banner-error">{error}</p>}
         {tab === 'overview' && (
           <>
             <div className="stats-grid">
@@ -639,7 +678,7 @@ function AdminPanel({ auth, onLogout }) {
               <div className="panel-title"><Users size={18} /><h3>Manage users</h3></div>
               <div className="admin-list">
                 {users.map((user) => (
-                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} />
+                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />
                 ))}
               </div>
             </div>
@@ -667,7 +706,7 @@ function AdminPanel({ auth, onLogout }) {
               <div className="panel-title"><Users size={18} /><h3>All users</h3></div>
               <div className="admin-list">
                 {users.map((user) => (
-                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} />
+                  <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />
                 ))}
               </div>
             </div>
@@ -704,8 +743,13 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
+    const onAuthExpired = () => setAuth(null);
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('auth-expired', onAuthExpired);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('auth-expired', onAuthExpired);
+    };
   }, []);
 
   useEffect(() => {

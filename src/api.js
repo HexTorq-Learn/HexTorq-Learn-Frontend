@@ -26,7 +26,17 @@ export async function api(path, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || `Request failed: ${response.status}`);
+    const error = new Error(data.message || `Request failed: ${response.status}`);
+    error.status = response.status;
+
+    if (response.status === 401) {
+      clearStoredAuth();
+      window.dispatchEvent(new CustomEvent('auth-expired', {
+        detail: { message: error.message },
+      }));
+    }
+
+    throw error;
   }
 
   return data;
