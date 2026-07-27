@@ -377,24 +377,44 @@ select {
 }
 
 .player-section {
-  display: grid;
-  grid-template-columns: minmax(420px, 1.6fr) minmax(280px, 0.7fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 20px;
-  align-items: stretch;
+  align-items: flex-start;
 }
 
 .player-wrap {
-  width: 100%;
-  aspect-ratio: 16 / 9;
+  position: relative;
+  width: min(920px, 100%);
+  height: clamp(260px, 48vw, 560px);
+  min-width: min(420px, 100%);
+  min-height: 236px;
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
   background: #111827;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: auto;
+  resize: both;
 }
 
 .player-target,
 .player-target iframe {
+  display: block;
   width: 100%;
   height: 100%;
+}
+
+.player-wrap::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.42) 50%) 10px 10px / 8px 8px no-repeat,
+    linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.28) 50%) 4px 10px / 14px 8px no-repeat;
 }
 
 .player-meta,
@@ -407,6 +427,8 @@ select {
 }
 
 .player-meta {
+  flex: 1 1 280px;
+  min-width: min(280px, 100%);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -857,7 +879,6 @@ select:disabled {
 
 @media (max-width: 1050px) {
   .app-shell,
-  .player-section,
   .analytics-grid,
   .analytics-grid.wide,
   .admin-header,
