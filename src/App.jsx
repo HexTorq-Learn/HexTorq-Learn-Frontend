@@ -178,10 +178,15 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
   const heatmapBuffer = useRef({});
   const playingRef = useRef(false);
   const lastTimeRef = useRef(null);
+  const onFlushRef = useRef(onFlush);
+  const onLocalMetricRef = useRef(onLocalMetric);
   const [status, setStatus] = useState('Loading');
   const [engaged, setEngaged] = useState(true);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [trackingError, setTrackingError] = useState('');
+
+  onFlushRef.current = onFlush;
+  onLocalMetricRef.current = onLocalMetric;
 
   const queueEvent = useCallback((eventType, extra = {}) => {
     const player = playerRef.current;
@@ -199,8 +204,8 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
     };
     if (Number.isFinite(currentTime)) event.videoTimeSec = currentTime;
     eventBuffer.current.push(event);
-    onLocalMetric?.({ type: 'event', eventType, video, videoTimeSec: event.videoTimeSec });
-  }, [onLocalMetric, video]);
+    onLocalMetricRef.current?.({ type: 'event', eventType, video, videoTimeSec: event.videoTimeSec });
+  }, [video]);
 
   const flush = useCallback(async () => {
     if (!video || (!eventBuffer.current.length && !Object.keys(heatmapBuffer.current).length)) return;
@@ -220,7 +225,7 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
         }),
       });
       setTrackingError('');
-      onFlush?.();
+      onFlushRef.current?.();
     } catch (error) {
       setTrackingError(error.message);
       if (error.status !== 400) {
@@ -231,7 +236,7 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
         }, heatmapBuffer.current);
       }
     }
-  }, [onFlush, video]);
+  }, [video]);
 
   useEffect(() => {
     let disposed = false;
@@ -349,7 +354,7 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
       heatmapBuffer.current[currentSecond] = (heatmapBuffer.current[currentSecond] || 0) + 1;
       lastTimeRef.current = currentTime;
       setActiveSeconds((value) => value + 1);
-      onLocalMetric?.({ type: 'tick', video, second: currentSecond });
+      onLocalMetricRef.current?.({ type: 'tick', video, second: currentSecond });
     }, 1000);
 
     const sync = setInterval(() => {
@@ -361,7 +366,7 @@ function LearningPlayer({ video, onFlush, onLocalMetric }) {
       clearInterval(tick);
       clearInterval(sync);
     };
-  }, [engaged, flush, onLocalMetric, queueEvent, video]);
+  }, [engaged, flush, queueEvent, video]);
 
   return (
     <section className="player-section">
