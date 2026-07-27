@@ -727,6 +727,20 @@ function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, leade
   );
 }
 
+function WatchSummary({ analytics, advanced, selectedVideo, liveConnected }) {
+  return (
+    <section className="watch-summary">
+      <div className="stats-grid">
+        <Stat icon={Clock} label="Active study" value={formatTime(analytics?.totals?.totalActiveSeconds || 0)} />
+        <Stat icon={Pause} label="Pauses" value={analytics?.totals?.totalPauseCount || 0} />
+        <Stat icon={Rewind} label="Seeks / rewinds" value={analytics?.totals?.totalSeekCount || 0} />
+        <Stat icon={liveConnected ? Wifi : WifiOff} label="Live metrics" value={liveConnected ? 'Connected' : 'Offline'} />
+      </div>
+      <VideoEtaPanel advanced={advanced} selectedVideo={selectedVideo} />
+    </section>
+  );
+}
+
 function AdminUserForm({ onCreated }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STUDENT' });
   const [error, setError] = useState('');
@@ -1296,6 +1310,14 @@ export default function App() {
         <button className="collapse-button" onClick={() => setSidebarOpen((value) => !value)} title="Toggle sidebar">
           {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
+        <nav className="learner-nav">
+          <button className={path === '/' ? 'nav-button active' : 'nav-button'} onClick={() => navigate('/')} title="Learning">
+            <Play size={16} /><span>Learning</span>
+          </button>
+          <button className={path === '/analytics' ? 'nav-button active' : 'nav-button'} onClick={() => navigate('/analytics')} title="Analytics">
+            <BarChart3 size={16} /><span>Analytics</span>
+          </button>
+        </nav>
         {auth.user.role === 'ADMIN' && (
           <button className="admin-link" onClick={() => navigate('/admin')}><Shield size={16} /><span>Admin panel</span></button>
         )}
@@ -1312,7 +1334,7 @@ export default function App() {
         <div className="video-list">
           <div className="list-heading"><ListVideo size={16} /><span>Videos</span></div>
           {groupedVideos.map((video) => (
-            <button key={video.id} className={selectedVideo?.id === video.id ? 'video-item active' : 'video-item'} onClick={() => setSelectedVideo(video)}>
+            <button key={video.id} className={selectedVideo?.id === video.id ? 'video-item active' : 'video-item'} onClick={() => { setSelectedVideo(video); navigate('/'); }}>
               <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
               <span>{video.title}</span>
             </button>
@@ -1321,11 +1343,13 @@ export default function App() {
         <button className="logout" onClick={logout}><LogOut size={16} /><span>Logout</span></button>
       </aside>
       <section className="content">
-        {selectedVideo ? (
-          <>
+        {path === '/analytics' ? (
+          <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} advanced={advanced} leaderboard={leaderboard} currentUserId={auth.user.id} liveConnected={liveConnected} />
+        ) : selectedVideo ? (
+          <div className="learning-page">
             <LearningPlayer video={selectedVideo} onFlush={loadData} onLocalMetric={applyLocalMetric} />
-            <Dashboard analytics={analytics} selectedVideo={selectedVideo} heatmap={heatmap} timeMap={timeMap} advanced={advanced} leaderboard={leaderboard} currentUserId={auth.user.id} liveConnected={liveConnected} />
-          </>
+            <WatchSummary analytics={analytics} advanced={advanced} selectedVideo={selectedVideo} liveConnected={liveConnected} />
+          </div>
         ) : (
           <div className="empty-state"><Play size={44} /><h1>Add a YouTube lesson to start tracking.</h1></div>
         )}

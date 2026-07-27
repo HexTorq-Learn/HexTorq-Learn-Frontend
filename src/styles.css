@@ -194,6 +194,7 @@ select {
 }
 
 .collapsed .brand div,
+.collapsed .nav-button span,
 .collapsed .admin-link span,
 .collapsed .list-heading span,
 .collapsed .playlist-button span,
@@ -257,6 +258,36 @@ select {
 .sidebar-section {
   display: grid;
   gap: 8px;
+}
+
+.learner-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-button {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  border: 1px solid #dde4ee;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #4d5969;
+  padding: 0 12px;
+  font-weight: 900;
+}
+
+.nav-button.active {
+  border-color: #1f6f64;
+  background: #edf8f6;
+  color: #1f6f64;
+}
+
+.collapsed .nav-button {
+  justify-content: center;
+  padding: 0;
 }
 
 .playlist-button {
@@ -374,6 +405,12 @@ select {
   display: grid;
   gap: 24px;
   align-content: start;
+}
+
+.learning-page,
+.watch-summary {
+  display: grid;
+  gap: 20px;
 }
 
 .player-section {
