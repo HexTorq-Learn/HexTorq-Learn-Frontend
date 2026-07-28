@@ -28,6 +28,23 @@ import { formatTime, groupHeatmapSegments, loadYouTubeApi } from './youtube.js';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
 const PLAYER_STATES = { [-1]: 'UNSTARTED', 0: 'END', 1: 'PLAY', 2: 'PAUSE', 3: 'BUFFER' };
 
+function formatHourLabel(hour) {
+  const suffix = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:00 ${suffix}`;
+}
+
+function formatClockLabel(clock) {
+  if (!clock) return '';
+  const match = String(clock).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (!match) return clock;
+  const hour = Number(match[1]);
+  if (!Number.isFinite(hour)) return clock;
+  const suffix = match[4]?.toUpperCase() || (hour >= 12 ? 'PM' : 'AM');
+  const displayHour = match[4] ? hour : hour % 12 || 12;
+  return `${displayHour}:${match[2]}:${match[3] || '00'} ${suffix}`;
+}
+
 function navigate(path) {
   window.history.pushState({}, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
@@ -399,11 +416,11 @@ function TimeHeatmap({ timeMap }) {
 
   return (
     <div className="panel">
-      <div className="panel-title"><Clock size={18} /><h3>24-hour watch heatmap</h3></div>
+      <div className="panel-title"><Clock size={18} /><h3>AM/PM watch heatmap</h3></div>
       <div className="hour-grid">
         {(timeMap?.hours || []).map((hour) => (
           <div className="hour-cell" key={hour.hour} style={{ '--level': hour.activeEvents / max }}>
-            <strong>{String(hour.hour).padStart(2, '0')}:00</strong>
+            <strong>{formatHourLabel(hour.hour)}</strong>
             <span>{hour.activeEvents} events</span>
           </div>
         ))}
@@ -419,7 +436,7 @@ function EventTimeline({ timeMap }) {
       <div className="timeline-list">
         {(timeMap?.timeline || []).slice().reverse().slice(0, 24).map((event) => (
           <div className="timeline-row" key={event.id}>
-            <strong>{event.clock}</strong>
+            <strong>{formatClockLabel(event.clock)}</strong>
             <span>{event.type}</span>
             <p>{event.video.title}{Number.isFinite(event.videoTimeSec) ? ` at ${formatTime(event.videoTimeSec)}` : ''}</p>
           </div>
@@ -516,10 +533,10 @@ function MinuteDrilldown({ timeMap }) {
     <div className="chart-block">
       <div className="chart-title">Minute drilldown heatmap</div>
       <select value={hour} onChange={(event) => setHour(Number(event.target.value))}>
-        {(timeMap?.hours || []).map((row) => <option key={row.hour} value={row.hour}>{String(row.hour).padStart(2, '0')}:00</option>)}
+        {(timeMap?.hours || []).map((row) => <option key={row.hour} value={row.hour}>{formatHourLabel(row.hour)}</option>)}
       </select>
       <div className="minute-grid">
-        {(selected?.seconds || []).map((row) => <span key={row.minute} style={{ '--level': row.count / max }} title={`${String(hour).padStart(2, '0')}:${String(row.minute).padStart(2, '0')} · ${row.count} events`} />)}
+        {(selected?.seconds || []).map((row) => <span key={row.minute} style={{ '--level': row.count / max }} title={`${formatClockLabel(`${String(hour).padStart(2, '0')}:${String(row.minute).padStart(2, '0')}:00`)} · ${row.count} events`} />)}
       </div>
     </div>
   );
@@ -658,7 +675,7 @@ function VideoEtaPanel({ advanced, selectedVideo }) {
 
   const remainingSeconds = Math.max(0, videoMetric.durationSec - videoMetric.uniqueWatchedSeconds);
   const eta = new Date(Date.now() + remainingSeconds * 1000);
-  const etaClock = remainingSeconds > 0 ? eta.toLocaleTimeString('en-GB', { hour12: false }) : 'Complete';
+  const etaClock = remainingSeconds > 0 ? eta.toLocaleTimeString('en-US', { hour12: true }) : 'Complete';
 
   return (
     <div className="panel eta-panel">
@@ -1024,11 +1041,11 @@ function AdminPanel({ auth, onLogout }) {
             </div>
             <div className="analytics-grid wide">
               <div className="panel">
-                <div className="panel-title"><Clock size={18} /><h3>All users 24-hour heatmap</h3></div>
+                <div className="panel-title"><Clock size={18} /><h3>All users AM/PM heatmap</h3></div>
                 <div className="hour-grid">
                   {(comparison?.charts?.allUsers24HourHeatmap || []).map((row) => (
                     <div className="hour-cell" key={row.hour} style={{ '--level': row.events / Math.max(1, ...(comparison?.charts?.allUsers24HourHeatmap || []).map((item) => item.events)) }}>
-                      <strong>{String(row.hour).padStart(2, '0')}:00</strong>
+                      <strong>{formatHourLabel(row.hour)}</strong>
                       <span>{row.events} events</span>
                     </div>
                   ))}
@@ -1219,7 +1236,7 @@ export default function App() {
             {
               id: `local-${Date.now()}-${metric.eventType}`,
               type: metric.eventType,
-              clock: now.toLocaleTimeString('en-GB', { hour12: false }),
+              clock: now.toLocaleTimeString('en-US', { hour12: true }),
               serverTs: now.toISOString(),
               videoTimeSec: metric.videoTimeSec,
               video: {
