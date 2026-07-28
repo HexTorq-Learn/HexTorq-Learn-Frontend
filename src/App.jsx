@@ -25,7 +25,7 @@ import { io } from 'socket.io-client';
 import { api, clearStoredAuth, getStoredAuth, setStoredAuth } from './api.js';
 import { formatTime, groupHeatmapSegments, loadYouTubeApi } from './youtube.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://gitpipeline.thedomainnest.com/hextorq-learn';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://git-pipeline.metatronhost.in/hextorq-learn';
 const PLAYER_STATES = { [-1]: 'UNSTARTED', 0: 'END', 1: 'PLAY', 2: 'PAUSE', 3: 'BUFFER' };
 
 function formatHourLabel(hour) {
