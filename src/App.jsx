@@ -26,6 +26,8 @@ import { api, clearStoredAuth, getStoredAuth, setStoredAuth } from './api.js';
 import { formatTime, groupHeatmapSegments, loadYouTubeApi } from './youtube.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://git-pipeline.metatronhost.in/hextorq-learn';
+const API_URL = new URL(API_BASE);
+const SOCKET_PATH = `${API_URL.pathname.replace(/\/$/, '')}/socket.io`;
 const PLAYER_STATES = { [-1]: 'UNSTARTED', 0: 'END', 1: 'PLAY', 2: 'PAUSE', 3: 'BUFFER' };
 
 function formatHourLabel(hour) {
@@ -1276,7 +1278,10 @@ export default function App() {
 
   useEffect(() => {
     if (!auth?.token) return undefined;
-    const socket = io(API_BASE, { auth: { token: auth.token } });
+    const socket = io(API_URL.origin, {
+      path: SOCKET_PATH,
+      auth: { token: auth.token },
+    });
     socket.on('connect', () => setLiveConnected(true));
     socket.on('disconnect', () => setLiveConnected(false));
     socket.on('metrics:update', ({ overview, timeMap: nextTimeMap }) => {
