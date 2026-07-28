@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://gitpipeline.thedomainnest.com/hextorq-learn';
 
 export function getStoredAuth() {
   const raw = localStorage.getItem('hextorq_learn_auth');
