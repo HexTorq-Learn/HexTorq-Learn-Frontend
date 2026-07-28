@@ -36,6 +36,19 @@ function formatHourLabel(hour) {
   return `${displayHour}:00 ${suffix}`;
 }
 
+function formatDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function formatClockLabel(clock) {
   if (!clock) return '';
   const match = String(clock).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
@@ -699,7 +712,7 @@ function Dashboard({ analytics, selectedVideo, heatmap, timeMap, advanced, leade
   const summariesByDate = useMemo(() => {
     const rows = {};
     analytics?.summaries?.forEach((summary) => {
-      const date = summary.date.slice(0, 10);
+      const date = formatDateKey(new Date(summary.date));
       rows[date] = (rows[date] || 0) + summary.activeWatchSeconds;
     });
     return Object.entries(rows).slice(0, 14);
@@ -917,7 +930,7 @@ function UserAnalyticsPanel({ userAnalytics, userTimeMap, advanced }) {
           <div className="admin-table">
             {rows.map((row) => (
               <div className="table-row" key={row.id}>
-                <span>{row.date.slice(0, 10)}</span>
+                <span>{formatDateKey(new Date(row.date))}</span>
                 <strong>{row.video.title}</strong>
                 <span>{formatTime(row.activeWatchSeconds)}</span>
               </div>
@@ -1117,7 +1130,7 @@ export default function App() {
 
   const applyLocalMetric = useCallback((metric) => {
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    const today = formatDateKey(now);
 
     if (metric.type === 'tick') {
       setAdvanced((current) => {
