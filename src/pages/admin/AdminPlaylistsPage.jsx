@@ -1,0 +1,24 @@
+import { useOutletContext } from 'react-router-dom';
+import { Folder, Plus } from 'lucide-react';
+import { PlaylistForm } from '../../components/videos/PlaylistForm.jsx';
+
+export default function AdminPlaylistsPage() {
+  const { playlists, reload } = useOutletContext();
+
+  return (
+    <div className="admin-grid">
+      <div className="panel"><div className="panel-title"><Plus size={18} /><h3>Create playlist</h3></div><PlaylistForm onCreated={reload} /></div>
+      <div className="panel">
+        <div className="panel-title"><Folder size={18} /><h3>Folders</h3></div>
+        <div className="admin-list">
+          {playlists.map((playlist) => (
+            <div className="playlist-admin-row" key={playlist.id}>
+              <i style={{ background: playlist.color }} />
+              <div><strong>{playlist.name}</strong><span>{playlist.videos.length} videos</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

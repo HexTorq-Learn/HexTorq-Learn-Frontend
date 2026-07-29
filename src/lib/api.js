@@ -1,17 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://git-pipeline.metatronhost.in/hextorq-learn';
-
-export function getStoredAuth() {
-  const raw = localStorage.getItem('hextorq_learn_auth');
-  return raw ? JSON.parse(raw) : null;
-}
-
-export function setStoredAuth(auth) {
-  localStorage.setItem('hextorq_learn_auth', JSON.stringify(auth));
-}
-
-export function clearStoredAuth() {
-  localStorage.removeItem('hextorq_learn_auth');
-}
+import { API_BASE } from './constants.js';
+import { clearStoredAuth, getStoredAuth } from './auth-storage.js';
 
 export async function api(path, options = {}) {
   const auth = getStoredAuth();
