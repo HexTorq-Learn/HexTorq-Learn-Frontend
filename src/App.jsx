@@ -590,6 +590,161 @@ function RadarBars({ rows = [] }) {
   );
 }
 
+function AdminHourHeatmap({ rows = [] }) {
+  const max = Math.max(1, ...rows.map((row) => row.events || 0));
+  return (
+    <div className="panel">
+      <div className="panel-title"><Clock size={18} /><h3>All users AM/PM heatmap</h3></div>
+      <div className="hour-grid">
+        {rows.map((row) => (
+          <div className="hour-cell" key={row.hour} style={{ '--level': (row.events || 0) / max }}>
+            <strong>{formatHourLabel(row.hour)}</strong>
+            <span>{row.events || 0} events</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardChart({ title, rows = [], metric, valueLabel }) {
+  const max = Math.max(1, ...rows.map((row) => metric(row)));
+  return (
+    <div className="panel">
+      <div className="panel-title"><BarChart3 size={18} /><h3>{title}</h3></div>
+      <div className="funnel-list">
+        {rows.slice(0, 10).map((row, index) => (
+          <MiniBar
+            key={row.user.id}
+            label={`#${index + 1} ${row.user.name}`}
+            value={metric(row)}
+            max={max}
+            detail={valueLabel(row)}
+          />
+        ))}
+        {!rows.length && <p className="muted">No learners yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+function RiskUserTable({ title, rows = [], detail }) {
+  return (
+    <div className="chart-block">
+      <div className="chart-title">{title}</div>
+      <div className="compact-table">
+        {rows.slice(0, 8).map((row) => (
+          <div className="compact-row" key={row.user.id}>
+            <strong>{row.user.name}</strong>
+            <span>{detail(row)}</span>
+          </div>
+        ))}
+        {!rows.length && <p className="muted">No users in this list.</p>}
+      </div>
+    </div>
+  );
+}
+
+function AdminAnalyticsDashboard({ users, comparison, selectedUser, setSelectedUser, userAnalytics, userTimeMap, userAdvanced, onChanged, currentUserId }) {
+  const comparisonRows = comparison?.userComparison || [];
+  const dailyRows = comparison?.charts?.dailyActiveLearners || [];
+  const totalStudyRows = comparison?.charts?.totalStudyTimeByDay || [];
+  const playlistRows = comparison?.charts?.playlistCompletion || [];
+
+  return (
+    <div className="admin-analytics-page">
+      <div className="stats-grid">
+        <Stat icon={Users} label="Compared users" value={comparisonRows.length} />
+        <Stat icon={Clock} label="Total active study" value={formatTime(comparisonRows.reduce((total, row) => total + row.activeStudySeconds, 0))} />
+        <Stat icon={Shield} label="Risk users" value={(comparison?.inactiveUsers?.length || 0) + (comparison?.lowCompletionUsers?.length || 0)} />
+        <Stat icon={BarChart3} label="Daily rows" value={dailyRows.length} />
+      </div>
+
+      <div className="analytics-grid wide">
+        <AdminHourHeatmap rows={comparison?.charts?.allUsers24HourHeatmap || []} />
+        <LeaderboardChart
+          title="Active study leaderboard"
+          rows={comparison?.leaderboards?.byActiveStudy || []}
+          metric={(row) => row.activeStudySeconds}
+          valueLabel={(row) => `${formatTime(row.activeStudySeconds)} · ${row.completionRatePercent}% complete`}
+        />
+      </div>
+
+      <div className="analytics-grid wide">
+        <LeaderboardChart
+          title="Consistency leaderboard"
+          rows={comparison?.leaderboards?.byConsistency || []}
+          metric={(row) => row.consistencyScore}
+          valueLabel={(row) => `${row.consistencyScore} streak score · Lv ${row.game?.level || 1}`}
+        />
+        <LeaderboardChart
+          title="Playlist progress leaderboard"
+          rows={comparison?.leaderboards?.byPlaylistProgress || []}
+          metric={(row) => row.playlistProgressPercent}
+          valueLabel={(row) => `${row.playlistProgressPercent}% playlist progress`}
+        />
+      </div>
+
+      <div className="analytics-grid wide">
+        <div className="panel">
+          <div className="panel-title"><Activity size={18} /><h3>Daily active learners</h3></div>
+          <div className="funnel-list">
+            {dailyRows.slice(-21).map((row) => <MiniBar key={row.date} label={row.date} value={row.activeUsers} max={Math.max(1, users.length)} detail={`${row.activeUsers} active · ${formatTime(row.totalStudySeconds)}`} />)}
+            {!dailyRows.length && <p className="muted">No daily learner activity yet.</p>}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-title"><Clock size={18} /><h3>Total study time by day</h3></div>
+          <div className="funnel-list">
+            {totalStudyRows.slice(-21).map((row) => <MiniBar key={row.date} label={row.date} value={row.totalStudySeconds} max={Math.max(1, ...totalStudyRows.map((item) => item.totalStudySeconds))} detail={formatTime(row.totalStudySeconds)} />)}
+            {!totalStudyRows.length && <p className="muted">No study time recorded yet.</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="analytics-grid wide">
+        <div className="panel">
+          <div className="panel-title"><Shield size={18} /><h3>Risk lists</h3></div>
+          <div className="risk-grid">
+            <RiskUserTable title="Inactive users" rows={comparison?.inactiveUsers || []} detail={(row) => `${formatTime(row.activeStudySeconds)} active`} />
+            <RiskUserTable title="High distraction" rows={comparison?.highDistractionUsers || []} detail={(row) => `${row.distractionRate} focus losses`} />
+            <RiskUserTable title="Low completion" rows={comparison?.lowCompletionUsers || []} detail={(row) => `${row.completionRatePercent}% completion`} />
+            <RiskUserTable title="Stuck users" rows={comparison?.stuckUsers || []} detail={(row) => `${row.stuckSegments} stuck segments`} />
+          </div>
+        </div>
+        <div className="panel">
+          <RadarBars rows={comparisonRows} />
+        </div>
+      </div>
+
+      <div className="analytics-grid wide">
+        <div className="panel">
+          <div className="panel-title"><Folder size={18} /><h3>Playlist completion chart</h3></div>
+          <div className="funnel-list">
+            {playlistRows.map((row) => <MiniBar key={row.id} label={row.name} value={row.videoCount} max={Math.max(1, ...playlistRows.map((item) => item.videoCount))} detail={`${row.videoCount} videos · ${row.activityRows} activity rows`} />)}
+            {!playlistRows.length && <p className="muted">No playlists yet.</p>}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-title"><Users size={18} /><h3>Cohort retention</h3></div>
+          <div className="funnel-list">
+            {(comparison?.charts?.cohortRetention || []).map((row) => <MiniBar key={row.cohort} label={row.cohort} value={row.users} max={Math.max(1, users.length)} detail={`${row.users} learners`} />)}
+            {!comparison?.charts?.cohortRetention?.length && <p className="muted">No cohort data yet.</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="analytics-grid admin-drilldown">
+        <div className="panel">
+          <div className="panel-title"><Users size={18} /><h3>Select learner</h3></div>
+          <div className="admin-list">{users.map((user) => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={onChanged} currentUserId={currentUserId} />)}</div>
+        </div>
+        <UserAnalyticsPanel userAnalytics={userAnalytics} userTimeMap={userTimeMap} advanced={userAdvanced} />
+      </div>
+    </div>
+  );
+}
+
 function RangeText({ ranges }) {
   if (!ranges?.length) return 'None';
   return ranges.slice(0, 3).map((range) => `${formatTime(range.start)}-${formatTime(range.end)}`).join(', ');
@@ -915,8 +1070,9 @@ function UserAnalyticsPanel({ userAnalytics, userTimeMap, advanced }) {
   const rows = userAnalytics?.summaries || [];
 
   return (
-    <div className="panel">
-      <div className="panel-title"><BarChart3 size={18} /><h3>{userAnalytics ? `${userAnalytics.user.name} analytics` : 'Select a user'}</h3></div>
+    <div className="learner-drilldown">
+      <div className="panel">
+        <div className="panel-title"><BarChart3 size={18} /><h3>{userAnalytics ? `${userAnalytics.user.name} analytics` : 'Select a user'}</h3></div>
       {userAnalytics && (
         <>
           <div className="stats-grid compact">
@@ -925,17 +1081,32 @@ function UserAnalyticsPanel({ userAnalytics, userTimeMap, advanced }) {
             <Stat icon={Rewind} label="Seeks" value={userAnalytics.totals.seekCount} />
             <Stat icon={Play} label="Sessions" value={userAnalytics.totals.sessionCount} />
           </div>
-          <TimeHeatmap timeMap={userTimeMap} />
-          <AdvancedAnalytics advanced={advanced} />
-          <div className="admin-table">
-            {rows.map((row) => (
-              <div className="table-row" key={row.id}>
-                <span>{formatDateKey(new Date(row.date))}</span>
-                <strong>{row.video.title}</strong>
-                <span>{formatTime(row.activeWatchSeconds)}</span>
-              </div>
-            ))}
+        </>
+      )}
+      </div>
+      {userAnalytics && (
+        <>
+          <div className="analytics-grid wide">
+            <TimeHeatmap timeMap={userTimeMap} />
+            <EventTimeline timeMap={userTimeMap} />
           </div>
+          <div className="analytics-grid wide">
+            <div className="panel"><MinuteDrilldown timeMap={userTimeMap} /></div>
+            <div className="panel">
+              <div className="panel-title"><BarChart3 size={18} /><h3>Daily video activity</h3></div>
+              <div className="admin-table">
+                {rows.map((row) => (
+                  <div className="table-row" key={row.id}>
+                    <span>{formatDateKey(new Date(row.date))}</span>
+                    <strong>{row.video.title}</strong>
+                    <span>{formatTime(row.activeWatchSeconds)}</span>
+                  </div>
+                ))}
+                {!rows.length && <p className="muted">No daily summaries yet.</p>}
+              </div>
+            </div>
+          </div>
+          <AdvancedAnalytics advanced={advanced} />
         </>
       )}
     </div>
@@ -1103,10 +1274,17 @@ function AdminPanel({ auth, onLogout }) {
           </div>
         )}
         {tab === 'analytics' && (
-          <div className="admin-grid">
-            <div className="panel"><div className="panel-title"><Users size={18} /><h3>All users</h3></div><div className="admin-list">{users.map((user) => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={setSelectedUser} onChanged={loadAdmin} currentUserId={auth.user.id} />)}</div></div>
-            <UserAnalyticsPanel userAnalytics={userAnalytics} userTimeMap={userTimeMap} advanced={userAdvanced} />
-          </div>
+          <AdminAnalyticsDashboard
+            users={users}
+            comparison={comparison}
+            selectedUser={selectedUser}
+            setSelectedUser={setSelectedUser}
+            userAnalytics={userAnalytics}
+            userTimeMap={userTimeMap}
+            userAdvanced={userAdvanced}
+            onChanged={loadAdmin}
+            currentUserId={auth.user.id}
+          />
         )}
       </section>
     </main>

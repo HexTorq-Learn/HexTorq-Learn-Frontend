@@ -925,6 +925,53 @@ select {
   background: #f5f7fb;
 }
 
+.admin-analytics-page,
+.learner-drilldown {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-drilldown {
+  grid-template-columns: minmax(300px, 0.55fr) minmax(0, 1.45fr);
+  align-items: start;
+}
+
+.risk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.compact-table {
+  display: grid;
+  gap: 8px;
+}
+
+.compact-row {
+  min-height: 42px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f5f7fb;
+}
+
+.compact-row strong,
+.compact-row span {
+  display: block;
+}
+
+.compact-row strong {
+  color: #18202b;
+  font-size: 13px;
+}
+
+.compact-row span {
+  color: #637083;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .game-profile {
   display: grid;
   gap: 12px;
@@ -1203,6 +1250,7 @@ select:disabled {
   .analytics-grid,
   .analytics-grid.wide,
   .admin-header,
+  .admin-drilldown,
   .admin-grid {
     grid-template-columns: 1fr;
   }
@@ -1252,6 +1300,7 @@ select:disabled {
 
   .advanced-grid,
   .metric-grid,
+  .risk-grid,
   .eta-grid {
     grid-template-columns: 1fr;
   }
