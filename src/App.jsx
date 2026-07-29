@@ -622,7 +622,7 @@ function LearnerLeaderboard({ leaderboard = [], currentUserId }) {
           <div className={row.userId === currentUserId ? 'leader-row current' : 'leader-row'} key={row.userId}>
             <strong>#{index + 1}</strong>
             <span>{row.name}<small>{row.publicLearnerId}</small></span>
-            <em>Lv {row.level} · {row.xp} XP · {formatTime(row.activeStudySeconds)}</em>
+            <em>Lv {row.level} · {row.role || 'Starter'} · {row.xp} XP · {row.badgeCount || row.badges?.length || 0} badges · {formatTime(row.activeStudySeconds)}</em>
           </div>
         ))}
       </div>
@@ -661,6 +661,64 @@ function DifficultyMatrix({ rows = [] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function GameDashboard({ game }) {
+  if (!game) return null;
+  const badges = game.allBadges || game.badges || [];
+  const unlocked = badges.filter((badge) => badge.unlocked);
+  const locked = badges.filter((badge) => !badge.unlocked);
+
+  return (
+    <section className="game-dashboard">
+      <div className="game-hero">
+        <div>
+          <span>{game.publicLearnerId}</span>
+          <strong>Level {game.level || 1}</strong>
+          <p>{game.role || 'Starter'} · {game.xp || 0} XP · {game.coins || 0} coins</p>
+        </div>
+        <DonutGauge label="Level progress" value={game.levelProgressPercent || 0} detail={`${game.xp || 0}/${game.nextLevelXp || 0} XP`} />
+      </div>
+
+      <div className="game-kpi-grid">
+        <MetricCard title="Unlocked badges" value={`${game.badgeCount || unlocked.length}/${game.totalBadgeCount || badges.length}`} detail="Achievement collection" />
+        <MetricCard title="Current role" value={game.role || 'Starter'} detail="Based on level and XP" />
+        <MetricCard title="Coins" value={game.coins || 0} detail="Earned from study and badges" />
+        <MetricCard title="Next targets" value={game.strategy?.nextBestActions?.length || locked.length} detail="Badges close to unlock" />
+      </div>
+
+      <div className="game-section">
+        <div className="chart-title">Achievement tracks</div>
+        <div className="achievement-grid">
+          {(game.achievements || []).map((achievement) => (
+            <MiniBar key={achievement.key} label={achievement.label} value={achievement.percent || 0} max={100} detail={`${achievement.percent || 0}%`} />
+          ))}
+        </div>
+      </div>
+
+      <div className="game-section">
+        <div className="chart-title">Next best badge targets</div>
+        <div className="achievement-grid">
+          {(game.strategy?.nextBestActions || []).map((badge) => (
+            <MiniBar key={badge.key} label={badge.label} value={badge.percent || 0} max={100} detail={`${badge.progress}/${badge.target} · ${badge.category}`} />
+          ))}
+        </div>
+      </div>
+
+      <div className="game-section">
+        <div className="chart-title">Badge wall</div>
+        <div className="badge-wall">
+          {badges.map((badge) => (
+            <div className={badge.unlocked ? 'badge-tile unlocked' : 'badge-tile'} key={badge.key} title={badge.description}>
+              <strong>{badge.label}</strong>
+              <span>{badge.category}</span>
+              <i style={{ width: `${badge.percent || 0}%` }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -817,6 +875,19 @@ function AdminAnalyticsDashboard({ users, comparison, selectedUser, setSelectedU
         </div>
         <UserAnalyticsPanel userAnalytics={userAnalytics} userTimeMap={userTimeMap} advanced={userAdvanced} />
       </div>
+
+      <div className="panel">
+        <div className="panel-title"><Shield size={18} /><h3>Gaming leaderboard</h3></div>
+        <div className="game-leaderboard">
+          {[...comparisonRows].sort((a, b) => (b.game?.xp || 0) - (a.game?.xp || 0)).slice(0, 12).map((row, index) => (
+            <div className="game-rank-row" key={row.user.id}>
+              <strong>#{index + 1}</strong>
+              <span>{row.user.name}<small>{row.publicLearnerId}</small></span>
+              <em>Lv {row.game?.level || 1} · {row.game?.role || 'Starter'} · {row.game?.xp || 0} XP · {row.game?.badgeCount || row.game?.badges?.length || 0} badges</em>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -837,18 +908,7 @@ function AdvancedAnalytics({ advanced }) {
     <section className="advanced-grid">
       <div className="panel">
         <div className="panel-title"><Shield size={18} /><h3>Game profile</h3></div>
-        <div className="game-profile">
-          <div>
-            <span>{advanced.game?.publicLearnerId}</span>
-            <strong>Level {advanced.game?.level || 1}</strong>
-            <p>{advanced.game?.xp || 0} XP · {advanced.game?.levelProgressPercent || 0}% to next level</p>
-          </div>
-          <div className="progress-track"><i style={{ width: `${advanced.game?.levelProgressPercent || 0}%` }} /></div>
-          <div className="badge-list">
-            {(advanced.game?.badges || []).map((badge) => <span key={badge.key}>{badge.label}</span>)}
-            {!advanced.game?.badges?.length && <span>Start learning to unlock badges</span>}
-          </div>
-        </div>
+        <GameDashboard game={advanced.game} />
       </div>
       <div className="panel">
         <div className="panel-title"><Activity size={18} /><h3>Learning quality</h3></div>
