@@ -472,6 +472,62 @@ function MetricCard({ title, value, detail }) {
   );
 }
 
+function DonutGauge({ label, value = 0, detail }) {
+  const percent = Math.max(0, Math.min(100, Number(value) || 0));
+  return (
+    <div className="donut-card">
+      <div className="donut" style={{ '--value': `${percent}%` }}>
+        <span>{Math.round(percent)}%</span>
+      </div>
+      <div>
+        <strong>{label}</strong>
+        {detail && <p>{detail}</p>}
+      </div>
+    </div>
+  );
+}
+
+function SparklineChart({ rows = [], getValue, label, detail }) {
+  const values = rows.map((row) => Number(getValue(row)) || 0);
+  const max = Math.max(1, ...values);
+  const points = values.length
+    ? values.map((value, index) => {
+      const x = values.length === 1 ? 150 : (index / (values.length - 1)) * 300;
+      const y = 96 - (value / max) * 80;
+      return `${x},${y}`;
+    }).join(' ')
+    : '';
+  const area = points ? `0,100 ${points} 300,100` : '';
+
+  return (
+    <div className="spark-chart">
+      <div className="chart-title">{label}</div>
+      <svg viewBox="0 0 300 110" role="img" aria-label={label}>
+        <polyline className="grid-line" points="0,96 300,96" />
+        {area && <polygon className="area" points={area} />}
+        {points && <polyline className="line" points={points} />}
+        {values.map((value, index) => {
+          const x = values.length === 1 ? 150 : (index / (values.length - 1)) * 300;
+          const y = 96 - (value / max) * 80;
+          return <circle key={`${index}-${value}`} cx={x} cy={y} r="3" />;
+        })}
+      </svg>
+      {detail && <p>{detail}</p>}
+    </div>
+  );
+}
+
+function TimelineStrip({ events = [] }) {
+  return (
+    <div className="timeline-strip">
+      <div className="chart-title">Event sequence strip</div>
+      <div>
+        {events.slice(-42).map((event) => <span key={event.id} className={`event-${String(event.type).toLowerCase()}`} title={`${formatClockLabel(event.clock)} · ${event.type}`} />)}
+      </div>
+    </div>
+  );
+}
+
 function MiniBar({ label, value, max, detail }) {
   return (
     <div className="mini-bar">
@@ -498,7 +554,7 @@ function CompletionFunnel({ steps = [] }) {
   return (
     <div className="chart-block">
       <div className="chart-title">Completion funnel</div>
-      <div className="funnel-list">
+      <div className="funnel-pyramid">
         {steps.map((step) => <MiniBar key={step.key} label={step.label} value={step.percent} max={100} detail={`${step.count} videos · ${step.percent}%`} />)}
       </div>
     </div>
@@ -583,6 +639,24 @@ function RadarBars({ rows = [] }) {
           <div className="radar-row" key={row.user.id}>
             <strong>{row.user.name}</strong>
             {Object.entries(row.radar || {}).map(([key, value]) => <MiniBar key={key} label={key} value={value} max={100} detail={`${Math.round(value)}%`} />)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DifficultyMatrix({ rows = [] }) {
+  const sorted = [...rows].sort((a, b) => b.hardTopicScore - a.hardTopicScore).slice(0, 12);
+  const max = Math.max(1, ...sorted.map((row) => row.hardTopicScore || 0));
+  return (
+    <div className="chart-block">
+      <div className="chart-title">Video difficulty matrix</div>
+      <div className="difficulty-matrix">
+        {sorted.map((row) => (
+          <div key={row.videoId} title={`${row.title}: ${row.hardTopicScore}`}>
+            <span style={{ height: `${Math.max(8, ((row.hardTopicScore || 0) / max) * 94)}%` }} />
+            <small>{Math.round(row.hardTopicScore || 0)}</small>
           </div>
         ))}
       </div>
@@ -688,6 +762,7 @@ function AdminAnalyticsDashboard({ users, comparison, selectedUser, setSelectedU
       <div className="analytics-grid wide">
         <div className="panel">
           <div className="panel-title"><Activity size={18} /><h3>Daily active learners</h3></div>
+          <SparklineChart rows={dailyRows.slice(-21)} getValue={(row) => row.activeUsers} label="Active learner trend" detail={`${dailyRows.at(-1)?.activeUsers || 0} active on latest day`} />
           <div className="funnel-list">
             {dailyRows.slice(-21).map((row) => <MiniBar key={row.date} label={row.date} value={row.activeUsers} max={Math.max(1, users.length)} detail={`${row.activeUsers} active · ${formatTime(row.totalStudySeconds)}`} />)}
             {!dailyRows.length && <p className="muted">No daily learner activity yet.</p>}
@@ -695,6 +770,7 @@ function AdminAnalyticsDashboard({ users, comparison, selectedUser, setSelectedU
         </div>
         <div className="panel">
           <div className="panel-title"><Clock size={18} /><h3>Total study time by day</h3></div>
+          <SparklineChart rows={totalStudyRows.slice(-21)} getValue={(row) => row.totalStudySeconds} label="Study time trend" detail={formatTime(totalStudyRows.at(-1)?.totalStudySeconds || 0)} />
           <div className="funnel-list">
             {totalStudyRows.slice(-21).map((row) => <MiniBar key={row.date} label={row.date} value={row.totalStudySeconds} max={Math.max(1, ...totalStudyRows.map((item) => item.totalStudySeconds))} detail={formatTime(row.totalStudySeconds)} />)}
             {!totalStudyRows.length && <p className="muted">No study time recorded yet.</p>}
@@ -776,20 +852,20 @@ function AdvancedAnalytics({ advanced }) {
       </div>
       <div className="panel">
         <div className="panel-title"><Activity size={18} /><h3>Learning quality</h3></div>
-        <div className="metric-grid">
-          <MetricCard title="Efficiency" value={`${advanced.learningTime.studyEfficiencyPercent}%`} detail="Active study / tab-open time" />
-          <MetricCard title="Focused time" value={formatTime(advanced.learningTime.focusedSeconds)} detail={`${formatTime(advanced.learningTime.unfocusedSeconds)} unfocused`} />
+        <div className="gauge-grid">
+          <DonutGauge label="Efficiency" value={advanced.learningTime.studyEfficiencyPercent} detail="Active / tab-open" />
+          <DonutGauge label="Focus score" value={advanced.charts?.insightCards?.focusScore || 0} detail={`${formatTime(advanced.learningTime.focusedSeconds)} focused`} />
           <MetricCard title="Idle time" value={formatTime(advanced.learningTime.idleSeconds)} detail={`${advanced.sessionQuality.idleTriggerCount} idle triggers`} />
           <MetricCard title="Study streak" value={`${advanced.learningTime.studyStreakDays} days`} detail={`Best hour ${advanced.learningTime.bestStudyHour || '--'}`} />
         </div>
       </div>
       <div className="panel">
         <div className="panel-title"><ListVideo size={18} /><h3>Progress</h3></div>
-        <div className="metric-grid">
-          <MetricCard title="Completed" value={advanced.learningProgress.completedVideos} detail={`${advanced.learningProgress.partiallyWatchedVideos} partial, ${advanced.learningProgress.unstartedVideos} unstarted`} />
+        <div className="gauge-grid">
+          <DonutGauge label="Daily target" value={advanced.learningProgress.watchTargetCompletionPercent} detail="1 hour goal" />
+          <DonutGauge label="Completion rate" value={advanced.charts?.insightCards?.completionRate || 0} detail={`${advanced.learningProgress.completedVideos} completed`} />
           <MetricCard title="Remaining" value={formatTime(advanced.learningProgress.remainingVideoSeconds)} detail="Estimated video time left" />
           <MetricCard title="Today delta" value={formatTime(Math.abs(advanced.learningProgress.todayVsYesterday.deltaSeconds))} detail={advanced.learningProgress.todayVsYesterday.deltaSeconds >= 0 ? 'More than yesterday' : 'Less than yesterday'} />
-          <MetricCard title="Target" value={`${advanced.learningProgress.watchTargetCompletionPercent}%`} detail="Of 1 hour daily target" />
         </div>
       </div>
       <div className="panel">
@@ -810,6 +886,7 @@ function AdvancedAnalytics({ advanced }) {
       </div>
       <div className="panel">
         <div className="panel-title"><Eye size={18} /><h3>Behavior</h3></div>
+        <TimelineStrip events={(advanced.behavior.playPausePattern || []).map((event, index) => ({ id: `${index}-${event.clock}`, type: event.type, clock: event.clock }))} />
         <div className="metric-grid">
           <MetricCard title="Pause/min" value={advanced.behavior.pauseFrequencyPerMinute} />
           <MetricCard title="Seek/min" value={advanced.behavior.seekFrequencyPerMinute} />
@@ -826,6 +903,7 @@ function AdvancedAnalytics({ advanced }) {
       </div>
       <div className="panel">
         <div className="panel-title"><BarChart3 size={18} /><h3>Consistency charts</h3></div>
+        <SparklineChart rows={advanced.learningTime.dailySeries || []} getValue={(row) => row.activeWatchSeconds} label="Daily study trend" detail={`${(advanced.learningTime.dailySeries || []).length} day points`} />
         <StreakCalendar days={advanced.charts?.streakCalendar || []} />
         <CompletionFunnel steps={advanced.charts?.completionFunnel || []} />
         <FocusIdleStack rows={advanced.charts?.focusIdleStack || []} />
@@ -834,6 +912,7 @@ function AdvancedAnalytics({ advanced }) {
         <div className="panel-title"><Folder size={18} /><h3>Course charts</h3></div>
         <PlaylistProgressChart rows={advanced.charts?.playlistProgress || []} />
         <VideoCompletionList rows={advanced.charts?.videoCompletionList || []} />
+        <DifficultyMatrix rows={advanced.rewatchDifficulty || []} />
       </div>
     </section>
   );
