@@ -8,16 +8,44 @@ import RegisterPage from './pages/RegisterPage.jsx';
 import LearnPage from './pages/LearnPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
+const CHUNK_ERROR_PATTERNS = [
+  'Failed to fetch dynamically imported module',
+  'Importing a module script failed',
+  'ChunkLoadError',
+  'error loading dynamically imported module',
+];
+
+function isChunkLoadError(error) {
+  const message = String(error?.message || error || '');
+  return CHUNK_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
+function lazyWithReload(loader) {
+  return lazy(async () => {
+    try {
+      return await loader();
+    } catch (error) {
+      const key = 'hextorq-learn:lazy-reload';
+      if (isChunkLoadError(error) && sessionStorage.getItem(key) !== window.location.href) {
+        sessionStorage.setItem(key, window.location.href);
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
+}
+
 // These pages/shells pull in three.js / echarts-gl (heavy) — code-split so /learn and /login stay light.
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx'));
-const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage.jsx'));
-const AdminShell = lazy(() => import('./components/layout/AdminShell.jsx').then((m) => ({ default: m.AdminShell })));
-const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage.jsx'));
-const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.jsx'));
-const AdminPlaylistsPage = lazy(() => import('./pages/admin/AdminPlaylistsPage.jsx'));
-const AdminVideosPage = lazy(() => import('./pages/admin/AdminVideosPage.jsx'));
-const AdminAnalyticsPage = lazy(() => import('./pages/admin/AdminAnalyticsPage.jsx'));
-const AdminUserDetailPage = lazy(() => import('./pages/admin/AdminUserDetailPage.jsx'));
+const AnalyticsPage = lazyWithReload(() => import('./pages/AnalyticsPage.jsx'));
+const LeaderboardPage = lazyWithReload(() => import('./pages/LeaderboardPage.jsx'));
+const AdminShell = lazyWithReload(() => import('./components/layout/AdminShell.jsx').then((m) => ({ default: m.AdminShell })));
+const AdminOverviewPage = lazyWithReload(() => import('./pages/admin/AdminOverviewPage.jsx'));
+const AdminUsersPage = lazyWithReload(() => import('./pages/admin/AdminUsersPage.jsx'));
+const AdminPlaylistsPage = lazyWithReload(() => import('./pages/admin/AdminPlaylistsPage.jsx'));
+const AdminVideosPage = lazyWithReload(() => import('./pages/admin/AdminVideosPage.jsx'));
+const AdminAnalyticsPage = lazyWithReload(() => import('./pages/admin/AdminAnalyticsPage.jsx'));
+const AdminUserDetailPage = lazyWithReload(() => import('./pages/admin/AdminUserDetailPage.jsx'));
 
 function withSuspense(element) {
   return <Suspense fallback={<p className="muted">Loading...</p>}>{element}</Suspense>;
