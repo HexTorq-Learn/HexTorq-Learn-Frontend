@@ -243,6 +243,109 @@
   cursor: pointer;
 }
 
+.playlist-under-player {
+  margin-top: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--color-surface-50);
+}
+
+.playlist-under-header {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-0);
+}
+
+.playlist-under-header div {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.playlist-under-header strong {
+  color: var(--color-text-primary);
+}
+
+.playlist-under-header span {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.playlist-under-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 340px);
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding: 0.7rem;
+}
+
+.playlist-under-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px 96px minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  padding: 0.45rem;
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.playlist-under-item:hover,
+.playlist-under-item.active {
+  border-color: var(--color-brand-100);
+  background: var(--color-brand-50);
+}
+
+.playlist-index {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.playlist-under-item img {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 0.45rem;
+  background: #000;
+}
+
+.playlist-under-title {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.playlist-under-title strong,
+.playlist-under-title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-under-title strong {
+  color: var(--color-text-primary);
+  font-size: 0.84rem;
+}
+
+.playlist-under-title small {
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+}
+
 .player-meta {
   padding-top: 0.9rem;
 }
@@ -425,6 +528,10 @@
 
   .learner-switchers {
     grid-template-columns: 1fr;
+  }
+
+  .playlist-under-list {
+    grid-auto-columns: minmax(240px, 86vw);
   }
 
   .admin-grid,

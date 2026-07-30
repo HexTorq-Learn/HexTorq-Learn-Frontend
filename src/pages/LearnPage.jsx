@@ -20,6 +20,9 @@ export default function LearnPage() {
 
   const selectedVideo = videos.find((video) => video.id === videoId) || null;
   const { heatmap, setHeatmap } = useVideoHeatmap(selectedVideo?.id);
+  const playlistVideos = selectedVideo?.playlistId
+    ? videos.filter((video) => video.playlistId === selectedVideo.playlistId)
+    : videos.filter((video) => !video.playlistId);
 
   useEffect(() => {
     if (!loading && !videoId && videos[0]) {
@@ -54,7 +57,13 @@ export default function LearnPage() {
 
   return (
     <div className="learning-page">
-      <LearningPlayer video={selectedVideo} onFlush={handleFlush} onLocalMetric={applyLocalMetric} />
+      <LearningPlayer
+        video={selectedVideo}
+        playlistVideos={playlistVideos.length ? playlistVideos : videos}
+        onSelectVideo={(nextVideo) => navigate(`/learn/${nextVideo.id}`)}
+        onFlush={handleFlush}
+        onLocalMetric={applyLocalMetric}
+      />
       <WatchSummary overview={overview} advanced={advanced} selectedVideo={selectedVideo} liveConnected={connected} />
     </div>
   );
