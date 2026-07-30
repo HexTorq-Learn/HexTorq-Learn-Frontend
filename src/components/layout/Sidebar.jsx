@@ -1,100 +1,91 @@
-import { useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
 import {
-  Activity, BarChart3, ChevronLeft, ChevronRight, Folder, ListVideo, LogOut, Play, Shield, Trophy,
+  Activity, BarChart3, Folder, ListVideo, LogOut, Play, Shield, Trophy,
 } from 'lucide-react';
 import { useAuth } from '../../providers/AuthProvider.jsx';
 import { useVideos } from '../../hooks/useVideos.js';
 import { ThemeToggle } from '../ui/ThemeToggle.jsx';
 
-export function Sidebar({ sidebarOpen, onToggle }) {
+export function Sidebar() {
   const { auth, logout } = useAuth();
   const { videos, playlists } = useVideos();
   const { videoId } = useParams();
   const navigate = useNavigate();
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState('all');
-
-  const groupedVideos = selectedPlaylistId === 'all'
-    ? videos
-    : selectedPlaylistId === 'none'
-      ? videos.filter((video) => !video.playlistId)
-      : videos.filter((video) => video.playlistId === selectedPlaylistId);
+  const currentVideo = videos.find((video) => video.id === videoId);
+  const currentPlaylistId = currentVideo?.playlistId || 'all';
 
   function onLogout() {
     logout();
     navigate('/login', { replace: true });
   }
 
+  function onPlaylistChange(event) {
+    const nextPlaylistId = event.target.value;
+    const nextVideo = nextPlaylistId === 'all'
+      ? videos[0]
+      : nextPlaylistId === 'none'
+        ? videos.find((video) => !video.playlistId)
+        : videos.find((video) => video.playlistId === nextPlaylistId);
+    if (nextVideo) navigate(`/learn/${nextVideo.id}`);
+  }
+
+  function onVideoChange(event) {
+    if (event.target.value) navigate(`/learn/${event.target.value}`);
+  }
+
   return (
-    <aside className={sidebarOpen ? 'sidebar' : 'sidebar collapsed'}>
-      <div className="sidebar-fixed">
-        <div className="brand">
-          <Activity />
-          {sidebarOpen && (
-            <div>
-              <strong>HexTorq Learn</strong>
-              <span>{auth?.user?.name}</span>
-            </div>
-          )}
+    <header className="learner-header">
+      <div className="brand learner-brand">
+        <Activity />
+        <div>
+          <strong>HexTorq Learn</strong>
+          <span>{auth?.user?.name}</span>
         </div>
-        <button className="collapse-button" onClick={onToggle} title="Toggle sidebar">
-          {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-        </button>
-        <nav className="learner-nav">
-          <NavLink to="/learn" className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`} title="Learning">
-            <Play size={16} />{sidebarOpen && <span>Learning</span>}
-          </NavLink>
-          <NavLink to="/analytics" className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`} title="Analytics">
-            <BarChart3 size={16} />{sidebarOpen && <span>Analytics</span>}
-          </NavLink>
-          <NavLink to="/leaderboard" className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`} title="Leaderboard">
-            <Trophy size={16} />{sidebarOpen && <span>Leaderboard</span>}
-          </NavLink>
-        </nav>
-        {auth?.user?.role === 'ADMIN' && (
-          <NavLink to="/admin" className="admin-link" title="Admin panel">
-            <Shield size={16} />{sidebarOpen && <span>Admin panel</span>}
-          </NavLink>
-        )}
-        {sidebarOpen && (
-          <div className="sidebar-section">
-            <div className="list-heading"><Folder size={16} /><span>Playlists</span></div>
-            <button className={selectedPlaylistId === 'all' ? 'playlist-button active' : 'playlist-button'} onClick={() => setSelectedPlaylistId('all')}><i /> <span>All videos</span><strong>{videos.length}</strong></button>
+      </div>
+
+      <nav className="learner-nav">
+        <NavLink to="/learn" className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`}>
+          <Play size={16} /><span>Learning</span>
+        </NavLink>
+        <NavLink to="/analytics" className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`}>
+          <BarChart3 size={16} /><span>Analytics</span>
+        </NavLink>
+        <NavLink to="/leaderboard" className={({ isActive }) => `nav-button${isActive ? ' active' : ''}`}>
+          <Trophy size={16} /><span>Leaderboard</span>
+        </NavLink>
+      </nav>
+
+      <div className="learner-switchers">
+        <label>
+          <Folder size={15} />
+          <select value={currentPlaylistId} onChange={onPlaylistChange}>
+            <option value="all">All videos</option>
             {playlists.map((playlist) => (
-              <button key={playlist.id} className={selectedPlaylistId === playlist.id ? 'playlist-button active' : 'playlist-button'} onClick={() => setSelectedPlaylistId(playlist.id)}>
-                <i style={{ background: playlist.color }} /><span>{playlist.name}</span><strong>{playlist.videos.length}</strong>
-              </button>
+              <option key={playlist.id} value={playlist.id}>{playlist.name}</option>
             ))}
-            <button className={selectedPlaylistId === 'none' ? 'playlist-button active' : 'playlist-button'} onClick={() => setSelectedPlaylistId('none')}><i /> <span>No playlist</span><strong>{videos.filter((video) => !video.playlistId).length}</strong></button>
-          </div>
+            <option value="none">No playlist</option>
+          </select>
+        </label>
+        <label>
+          <ListVideo size={15} />
+          <select value={currentVideo?.id || ''} onChange={onVideoChange}>
+            <option value="" disabled>Select video</option>
+            {videos.map((video) => (
+              <option key={video.id} value={video.id}>{video.title}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="learner-actions">
+        {auth?.user?.role === 'ADMIN' && (
+          <button className="small-button" onClick={() => navigate('/admin')}>
+            <Shield size={16} />Admin
+          </button>
         )}
+        <ThemeToggle />
+        <button className="logout" onClick={onLogout}><LogOut size={16} /><span>Logout</span></button>
       </div>
-
-      {sidebarOpen && (
-        <div className="video-list">
-          <div className="list-heading"><ListVideo size={16} /><span>Videos</span></div>
-          <div className="video-list-scroll">
-            {groupedVideos.map((video) => (
-              <button
-                key={video.id}
-                className={videoId === video.id ? 'video-item active' : 'video-item'}
-                onClick={() => navigate(`/learn/${video.id}`)}
-              >
-                <img src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`} alt="" />
-                <span>{video.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="sidebar-fixed">
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <ThemeToggle />
-          {sidebarOpen && <button className="logout" onClick={onLogout} style={{ flex: 1 }}><LogOut size={16} /><span>Logout</span></button>}
-          {!sidebarOpen && <button className="icon-light" onClick={onLogout} title="Logout"><LogOut size={16} /></button>}
-        </div>
-      </div>
-    </aside>
+    </header>
   );
 }
