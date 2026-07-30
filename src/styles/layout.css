@@ -207,7 +207,12 @@
 
 .player-wrap {
   position: relative;
-  padding-top: 56.25%;
+  width: min(100%, 1180px);
+  height: min(70vh, 664px);
+  min-width: min(360px, 100%);
+  min-height: 240px;
+  max-width: 100%;
+  resize: both;
   border-radius: 0.6rem;
   overflow: hidden;
   background: #000;

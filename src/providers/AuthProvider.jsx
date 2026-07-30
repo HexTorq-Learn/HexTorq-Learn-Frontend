@@ -23,10 +23,10 @@ export function AuthProvider({ children }) {
     return result;
   }, []);
 
-  const register = useCallback(async (name, email, password) => {
+  const register = useCallback(async (name, email, password, username, phone) => {
     const result = await api('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, username, phone }),
     });
     setStoredAuth(result);
     setAuth(result);

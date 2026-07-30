@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../../lib/api.js';
 
 export function AdminUserForm({ onCreated }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'STUDENT' });
+  const [form, setForm] = useState({ name: '', username: '', phone: '', email: '', password: '', role: 'STUDENT' });
   const [error, setError] = useState('');
 
   async function submit(event) {
@@ -10,7 +10,7 @@ export function AdminUserForm({ onCreated }) {
     setError('');
     try {
       await api('/api/admin/users', { method: 'POST', body: JSON.stringify(form) });
-      setForm({ name: '', email: '', password: '', role: 'STUDENT' });
+      setForm({ name: '', username: '', phone: '', email: '', password: '', role: 'STUDENT' });
       onCreated();
     } catch (err) {
       setError(err.message);
@@ -20,6 +20,8 @@ export function AdminUserForm({ onCreated }) {
   return (
     <form className="stack-form" onSubmit={submit}>
       <input placeholder="User name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+      <input placeholder="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} minLength={3} required />
+      <input type="tel" placeholder="Phone" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} minLength={7} required />
       <input type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required />
       <input type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
       <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>

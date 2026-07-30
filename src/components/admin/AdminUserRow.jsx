@@ -37,7 +37,7 @@ export function AdminUserRow({ user, selected, onChanged, currentUserId }) {
     <div className={selected ? 'admin-row active' : 'admin-row'}>
       <Link className="row-main" to={`/admin/users/${user.id}`}>
         <strong>{user.name}</strong>
-        <span>{user.email} · {formatTime(activeSeconds)} · {user._count.sessions} sessions{isCurrentUser ? ' · current admin' : ''}</span>
+        <span>{user.email}{user.username ? ` · @${user.username}` : ''}{user.phone ? ` · ${user.phone}` : ''} · {formatTime(activeSeconds)} · {user._count.sessions} sessions{isCurrentUser ? ' · current admin' : ''}</span>
         {error && <span className="row-error">{error}</span>}
       </Link>
       <select value={role} onChange={(event) => updateRole(event.target.value)} disabled={isCurrentUser}>
