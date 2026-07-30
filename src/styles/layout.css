@@ -464,6 +464,16 @@
   font-size: 0.72rem;
 }
 
+.daily-minutes-line {
+  color: var(--color-brand-600);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.spaced-title {
+  margin-top: 1rem;
+}
+
 .row-main {
   flex: 1;
   display: flex;

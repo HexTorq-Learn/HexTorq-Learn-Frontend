@@ -9,6 +9,11 @@ export function AdminUserRow({ user, selected, onChanged, currentUserId }) {
   const [error, setError] = useState('');
   const isCurrentUser = user.id === currentUserId;
   const activeSeconds = user.summaries.reduce((total, row) => total + row.activeWatchSeconds, 0);
+  const dailyMinutes = Object.entries(user.summaries.reduce((acc, row) => {
+    const day = new Date(row.date).toLocaleDateString('en-CA');
+    acc[day] = (acc[day] || 0) + row.activeWatchSeconds;
+    return acc;
+  }, {})).sort(([a], [b]) => b.localeCompare(a)).slice(0, 7);
 
   async function updateRole(nextRole) {
     setError('');
@@ -38,6 +43,11 @@ export function AdminUserRow({ user, selected, onChanged, currentUserId }) {
       <Link className="row-main" to={`/admin/users/${user.id}`}>
         <strong>{user.name}</strong>
         <span>{user.email}{user.username ? ` · @${user.username}` : ''}{user.phone ? ` · ${user.phone}` : ''} · {formatTime(activeSeconds)} · {user._count.sessions} sessions{isCurrentUser ? ' · current admin' : ''}</span>
+        <span className="daily-minutes-line">
+          {dailyMinutes.length
+            ? dailyMinutes.map(([day, seconds]) => `${day}: ${Math.round(seconds / 60)} min`).join(' · ')
+            : 'No daily watch minutes yet'}
+        </span>
         {error && <span className="row-error">{error}</span>}
       </Link>
       <select value={role} onChange={(event) => updateRole(event.target.value)} disabled={isCurrentUser}>

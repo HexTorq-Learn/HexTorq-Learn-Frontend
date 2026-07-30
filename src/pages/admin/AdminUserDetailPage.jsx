@@ -14,6 +14,11 @@ export default function AdminUserDetailPage() {
   const { users } = useOutletContext();
   const { userAnalytics, userTimeMap, userAdvanced } = useAdminUserDetail(userId);
   const user = users.find((row) => row.id === userId);
+  const dailyWatchMinutes = Object.entries((userAnalytics?.summaries || []).reduce((acc, row) => {
+    const day = formatDateKey(new Date(row.date));
+    acc[day] = (acc[day] || 0) + row.activeWatchSeconds;
+    return acc;
+  }, {})).sort(([a], [b]) => b.localeCompare(a));
 
   return (
     <div className="learner-drilldown">
@@ -40,7 +45,18 @@ export default function AdminUserDetailPage() {
           <div className="analytics-grid wide">
             <div className="panel"><MinuteDrilldown timeMap={userTimeMap} /></div>
             <div className="panel">
-              <div className="panel-title"><BarChart3 size={18} /><h3>Daily video activity</h3></div>
+              <div className="panel-title"><Clock size={18} /><h3>Minutes watched per day</h3></div>
+              <div className="admin-table daily-watch-table">
+                {dailyWatchMinutes.map(([day, seconds]) => (
+                  <div className="table-row" key={day}>
+                    <span>{day}</span>
+                    <strong>{Math.round(seconds / 60)} min</strong>
+                    <span>{formatTime(seconds)}</span>
+                  </div>
+                ))}
+                {!dailyWatchMinutes.length && <p className="muted">No daily watch minutes yet.</p>}
+              </div>
+              <div className="panel-title spaced-title"><BarChart3 size={18} /><h3>Daily video activity</h3></div>
               <div className="admin-table">
                 {(userAnalytics?.summaries || []).map((row) => (
                   <div className="table-row" key={row.id}>
