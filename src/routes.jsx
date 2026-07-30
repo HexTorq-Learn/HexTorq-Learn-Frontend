@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute, AdminRoute, PublicOnlyRoute } from './components/layout/RouteGuards.jsx';
+import { RouteErrorBoundary } from './components/layout/RouteErrorBoundary.jsx';
 import { AppShell } from './components/layout/AppShell.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -24,6 +25,7 @@ function withSuspense(element) {
 
 export const router = createBrowserRouter([
   {
+    errorElement: <RouteErrorBoundary />,
     element: <PublicOnlyRoute />,
     children: [
       { path: '/login', element: <LoginPage /> },
@@ -31,6 +33,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    errorElement: <RouteErrorBoundary />,
     element: <ProtectedRoute />,
     children: [
       {
