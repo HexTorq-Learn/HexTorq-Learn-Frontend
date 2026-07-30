@@ -9,6 +9,8 @@ export function LearningPlayer({ video, onFlush, onLocalMetric }) {
     activeSeconds,
     trackingError,
     mouseAway,
+    isPlaying,
+    togglePlayback,
     releaseYouTubeHover,
     restoreYouTubePointer,
   } = useYouTubePlayerTracking(video, { onFlush, onLocalMetric });
@@ -16,12 +18,21 @@ export function LearningPlayer({ video, onFlush, onLocalMetric }) {
   return (
     <section className="player-section">
       <div
-        className={mouseAway ? 'player-wrap mouse-away' : 'player-wrap'}
+        className={mouseAway || isPlaying ? 'player-wrap youtube-hover-locked' : 'player-wrap'}
         onMouseEnter={restoreYouTubePointer}
         onMouseMove={restoreYouTubePointer}
         onMouseLeave={releaseYouTubeHover}
       >
         <div ref={holderRef} className="player-target" />
+        {isPlaying && (
+          <button
+            type="button"
+            className="player-click-layer"
+            onClick={togglePlayback}
+            title="Pause video"
+            aria-label="Pause video"
+          />
+        )}
       </div>
       <div className="player-meta">
         <div>

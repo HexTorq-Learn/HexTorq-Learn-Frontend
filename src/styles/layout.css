@@ -229,8 +229,18 @@
   border: 0;
 }
 
-.player-wrap.mouse-away .player-target iframe {
+.player-wrap.youtube-hover-locked .player-target iframe {
   pointer-events: none;
+}
+
+.player-click-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .player-meta {

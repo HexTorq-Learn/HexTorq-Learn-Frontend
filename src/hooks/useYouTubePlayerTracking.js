@@ -21,6 +21,7 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [trackingError, setTrackingError] = useState('');
   const [mouseAway, setMouseAway] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   videoRef.current = video;
   onFlushRef.current = onFlush;
@@ -106,6 +107,12 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
             const eventType = PLAYER_STATES[event.data];
             if (!eventType) return;
             playingRef.current = event.data === 1;
+            setIsPlaying(event.data === 1);
+            if (event.data === 1) {
+              setMouseAway(true);
+              const iframe = playerRef.current?.getIframe?.();
+              iframe?.blur?.();
+            }
             setStatus(eventType);
             queueEvent(eventType);
           },
@@ -209,6 +216,7 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
   }, [engaged, flush, queueEvent]);
 
   const restoreYouTubePointer = useCallback(() => {
+    if (playingRef.current) return;
     setMouseAway(false);
   }, []);
 
@@ -218,7 +226,19 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
     iframe?.blur?.();
     if (document.activeElement === iframe) document.body?.focus?.();
     window.focus?.();
-    window.setTimeout(() => setMouseAway(false), 300);
+    window.setTimeout(() => {
+      if (!playingRef.current) setMouseAway(false);
+    }, 300);
+  }, []);
+
+  const togglePlayback = useCallback(() => {
+    const player = playerRef.current;
+    if (!player?.playVideo || !player?.pauseVideo) return;
+    if (playingRef.current) {
+      player.pauseVideo();
+    } else {
+      player.playVideo();
+    }
   }, []);
 
   return {
@@ -228,6 +248,8 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
     activeSeconds,
     trackingError,
     mouseAway,
+    isPlaying,
+    togglePlayback,
     releaseYouTubeHover,
     restoreYouTubePointer,
   };
