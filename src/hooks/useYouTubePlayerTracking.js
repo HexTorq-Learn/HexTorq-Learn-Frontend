@@ -215,6 +215,67 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
     };
   }, [engaged, flush, queueEvent]);
 
+  const seekBy = useCallback((deltaSeconds) => {
+    const player = playerRef.current;
+    if (!player?.getCurrentTime || !player?.seekTo) return;
+
+    const currentTime = player.getCurrentTime();
+    const duration = player.getDuration?.();
+    if (!Number.isFinite(currentTime)) return;
+
+    const nextTime = Math.max(0, Math.min(
+      Number.isFinite(duration) && duration > 0 ? duration : Number.MAX_SAFE_INTEGER,
+      currentTime + deltaSeconds,
+    ));
+    player.seekTo(nextTime, true);
+    lastTimeRef.current = nextTime;
+    queueEvent('SEEK', { fromTimeSec: currentTime, toTimeSec: nextTime });
+  }, [queueEvent]);
+
+  const togglePlayback = useCallback(() => {
+    const player = playerRef.current;
+    if (!player?.playVideo || !player?.pauseVideo) return;
+    if (playingRef.current) {
+      player.pauseVideo();
+    } else {
+      player.playVideo();
+    }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const target = event.target;
+      if (
+        target?.closest?.('input, textarea, select, [contenteditable="true"]')
+        || event.altKey
+        || event.ctrlKey
+        || event.metaKey
+      ) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        seekBy(-5);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        seekBy(5);
+      } else if (event.key === 'j' || event.key === 'J') {
+        event.preventDefault();
+        seekBy(-10);
+      } else if (event.key === 'l' || event.key === 'L') {
+        event.preventDefault();
+        seekBy(10);
+      } else if (event.key === ' ' || event.key === 'k' || event.key === 'K') {
+        event.preventDefault();
+        togglePlayback();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [seekBy, togglePlayback]);
+
   const restoreYouTubePointer = useCallback(() => {
     if (playingRef.current) return;
     setMouseAway(false);
@@ -229,16 +290,6 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
     window.setTimeout(() => {
       if (!playingRef.current) setMouseAway(false);
     }, 300);
-  }, []);
-
-  const togglePlayback = useCallback(() => {
-    const player = playerRef.current;
-    if (!player?.playVideo || !player?.pauseVideo) return;
-    if (playingRef.current) {
-      player.pauseVideo();
-    } else {
-      player.playVideo();
-    }
   }, []);
 
   return {
