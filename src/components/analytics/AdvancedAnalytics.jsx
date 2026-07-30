@@ -6,10 +6,10 @@ import { DonutGauge } from '../charts/2d/DonutGauge.jsx';
 import { SparklineChart } from '../charts/2d/SparklineChart.jsx';
 import { TimelineStrip } from '../charts/2d/TimelineStrip.jsx';
 import { VideoCompletionList } from '../charts/2d/VideoCompletionList.jsx';
+import { CompletionFunnel } from '../charts/2d/CompletionFunnel.jsx';
+import { FocusIdleStack } from '../charts/2d/FocusIdleStack.jsx';
+import { PlaylistProgressChart } from '../charts/2d/PlaylistProgressChart.jsx';
 import { StreakCalendarHeatmap } from '../charts/echarts/StreakCalendarHeatmap.jsx';
-import { CompletionFunnel3D } from '../charts/echarts/CompletionFunnel3D.jsx';
-import { FocusIdleBar3D } from '../charts/echarts/FocusIdleBar3D.jsx';
-import { PlaylistProgressBar3D } from '../charts/echarts/PlaylistProgressBar3D.jsx';
 import { DifficultyScatter3D } from '../charts/echarts/DifficultyScatter3D.jsx';
 import { GameDashboard } from '../gamification/GameDashboard.jsx';
 
@@ -92,15 +92,15 @@ export function AdvancedAnalytics({ advanced }) {
         <SparklineChart rows={advanced.learningTime.dailySeries || []} getValue={(row) => row.activeWatchSeconds} label="Daily study trend" detail={`${(advanced.learningTime.dailySeries || []).length} day points`} />
         <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginTop: '1rem' }}>
           <StreakCalendarHeatmap days={advanced.charts?.streakCalendar || []} />
-          <CompletionFunnel3D steps={advanced.charts?.completionFunnel || []} />
-          <FocusIdleBar3D rows={advanced.charts?.focusIdleStack || []} />
+          <CompletionFunnel steps={advanced.charts?.completionFunnel || []} />
+          <FocusIdleStack rows={advanced.charts?.focusIdleStack || []} />
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-title"><Folder size={18} /><h3>Course charts</h3></div>
         <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
-          <PlaylistProgressBar3D rows={advanced.charts?.playlistProgress || []} />
+          <PlaylistProgressChart rows={advanced.charts?.playlistProgress || []} />
           <VideoCompletionList rows={advanced.charts?.videoCompletionList || []} />
           <DifficultyScatter3D rows={advanced.rewatchDifficulty || []} />
         </div>

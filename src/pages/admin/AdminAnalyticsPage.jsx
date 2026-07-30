@@ -4,8 +4,8 @@ import { Stat } from '../../components/ui/Stat.jsx';
 import { formatTime } from '../../lib/youtube.js';
 import { SparklineChart } from '../../components/charts/2d/SparklineChart.jsx';
 import { RadarChart } from '../../components/charts/echarts/RadarChart.jsx';
-import { AdminComparisonBar3D } from '../../components/charts/echarts/AdminComparisonBar3D.jsx';
-import { CohortRetentionBar3D } from '../../components/charts/echarts/CohortRetentionBar3D.jsx';
+import { LeaderboardChart } from '../../components/admin/LeaderboardChart.jsx';
+import { CohortRetentionChart } from '../../components/admin/CohortRetentionChart.jsx';
 import { RiskUserTable } from '../../components/admin/RiskUserTable.jsx';
 
 export default function AdminAnalyticsPage() {
@@ -25,13 +25,13 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <div className="analytics-grid wide">
-        <AdminComparisonBar3D
+        <LeaderboardChart
           title="Consistency leaderboard"
           rows={comparison?.leaderboards?.byConsistency || []}
           metric={(row) => row.consistencyScore}
           valueLabel={(row) => `${row.consistencyScore} streak score · Lv ${row.game?.level || 1}`}
         />
-        <AdminComparisonBar3D
+        <LeaderboardChart
           title="Playlist progress leaderboard"
           rows={comparison?.leaderboards?.byPlaylistProgress || []}
           metric={(row) => row.playlistProgressPercent}
@@ -78,7 +78,7 @@ export default function AdminAnalyticsPage() {
             {!playlistRows.length && <p className="muted">No playlists yet.</p>}
           </div>
         </div>
-        <CohortRetentionBar3D rows={comparison?.charts?.cohortRetention || []} />
+        <CohortRetentionChart rows={comparison?.charts?.cohortRetention || []} />
       </div>
 
       <div className="panel">

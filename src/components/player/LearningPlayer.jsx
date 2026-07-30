@@ -2,11 +2,25 @@ import { formatTime } from '../../lib/youtube.js';
 import { useYouTubePlayerTracking } from '../../hooks/useYouTubePlayerTracking.js';
 
 export function LearningPlayer({ video, onFlush, onLocalMetric }) {
-  const { holderRef, status, engaged, activeSeconds, trackingError } = useYouTubePlayerTracking(video, { onFlush, onLocalMetric });
+  const {
+    holderRef,
+    status,
+    engaged,
+    activeSeconds,
+    trackingError,
+    mouseAway,
+    releaseYouTubeHover,
+    restoreYouTubePointer,
+  } = useYouTubePlayerTracking(video, { onFlush, onLocalMetric });
 
   return (
     <section className="player-section">
-      <div className="player-wrap">
+      <div
+        className={mouseAway ? 'player-wrap mouse-away' : 'player-wrap'}
+        onMouseEnter={restoreYouTubePointer}
+        onMouseMove={restoreYouTubePointer}
+        onMouseLeave={releaseYouTubeHover}
+      >
         <div ref={holderRef} className="player-target" />
       </div>
       <div className="player-meta">

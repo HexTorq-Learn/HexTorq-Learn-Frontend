@@ -20,6 +20,7 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
   const [engaged, setEngaged] = useState(true);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [trackingError, setTrackingError] = useState('');
+  const [mouseAway, setMouseAway] = useState(false);
 
   videoRef.current = video;
   onFlushRef.current = onFlush;
@@ -98,7 +99,7 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
 
       player = new YT.Player(holderRef.current, {
         videoId: activeVideo.youtubeId,
-        playerVars: { rel: 0, modestbranding: 1 },
+        playerVars: { rel: 0, modestbranding: 1, iv_load_policy: 3, playsinline: 1, origin: window.location.origin },
         events: {
           onReady: () => setStatus('Ready'),
           onStateChange: (event) => {
@@ -207,5 +208,27 @@ export function useYouTubePlayerTracking(video, { onFlush, onLocalMetric } = {})
     };
   }, [engaged, flush, queueEvent]);
 
-  return { holderRef, status, engaged, activeSeconds, trackingError };
+  const restoreYouTubePointer = useCallback(() => {
+    setMouseAway(false);
+  }, []);
+
+  const releaseYouTubeHover = useCallback(() => {
+    setMouseAway(true);
+    const iframe = playerRef.current?.getIframe?.();
+    iframe?.blur?.();
+    if (document.activeElement === iframe) document.body?.focus?.();
+    window.focus?.();
+    window.setTimeout(() => setMouseAway(false), 300);
+  }, []);
+
+  return {
+    holderRef,
+    status,
+    engaged,
+    activeSeconds,
+    trackingError,
+    mouseAway,
+    releaseYouTubeHover,
+    restoreYouTubePointer,
+  };
 }

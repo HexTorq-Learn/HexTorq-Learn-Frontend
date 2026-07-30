@@ -3,8 +3,8 @@ import { BarChart3, Clock, Folder, ListVideo, Shield, Users } from 'lucide-react
 import { Stat } from '../../components/ui/Stat.jsx';
 import { MetricCard } from '../../components/ui/MetricCard.jsx';
 import { formatTime } from '../../lib/youtube.js';
-import { AdminHourHeatmapSurface3D } from '../../components/charts/echarts/AdminHourHeatmapSurface3D.jsx';
-import { AdminComparisonBar3D } from '../../components/charts/echarts/AdminComparisonBar3D.jsx';
+import { AdminHourHeatmap } from '../../components/admin/AdminHourHeatmap.jsx';
+import { LeaderboardChart } from '../../components/admin/LeaderboardChart.jsx';
 
 export default function AdminOverviewPage() {
   const { summary, users, videos, comparison } = useOutletContext();
@@ -30,7 +30,7 @@ export default function AdminOverviewPage() {
       </div>
 
       <div className="analytics-grid wide">
-        <AdminComparisonBar3D
+        <LeaderboardChart
           title="Active study leaderboard"
           rows={comparison?.leaderboards?.byActiveStudy || []}
           metric={(row) => row.activeStudySeconds}
@@ -48,7 +48,7 @@ export default function AdminOverviewPage() {
       </div>
 
       <div className="analytics-grid wide">
-        <AdminHourHeatmapSurface3D rows={comparison?.charts?.allUsers24HourHeatmap || []} />
+        <AdminHourHeatmap rows={comparison?.charts?.allUsers24HourHeatmap || []} />
         <div className="panel">
           <div className="panel-title"><BarChart3 size={18} /><h3>Daily active learners</h3></div>
           <div className="funnel-list">
