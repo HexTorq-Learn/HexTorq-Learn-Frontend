@@ -9,7 +9,7 @@ import { CohortRetentionChart } from '../../components/admin/CohortRetentionChar
 import { RiskUserTable } from '../../components/admin/RiskUserTable.jsx';
 
 export default function AdminAnalyticsPage() {
-  const { comparison } = useOutletContext();
+  const { comparison, comparisonLoading } = useOutletContext();
   const comparisonRows = comparison?.userComparison || [];
   const dailyRows = comparison?.charts?.dailyActiveLearners || [];
   const totalStudyRows = comparison?.charts?.totalStudyTimeByDay || [];
@@ -17,6 +17,7 @@ export default function AdminAnalyticsPage() {
 
   return (
     <div className="admin-analytics-page">
+      {comparisonLoading && !comparison && <p className="muted">Loading analytics charts...</p>}
       <div className="stats-grid">
         <Stat icon={Users} label="Compared users" value={comparisonRows.length} />
         <Stat icon={Clock} label="Total active study" value={formatTime(comparisonRows.reduce((total, row) => total + row.activeStudySeconds, 0))} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useSocket } from '../providers/SocketProvider.jsx';
 
@@ -8,28 +8,49 @@ export function useAdminData() {
   const [videos, setVideos] = useState([]);
   const [playlists, setPlaylists] = useState([]);
   const [comparison, setComparison] = useState(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
   const [error, setError] = useState('');
   const { socket } = useSocket();
+  const coreReloadingRef = useRef(false);
 
-  const reload = useCallback(async () => {
+  const reloadCore = useCallback(async () => {
+    if (coreReloadingRef.current) return;
+    coreReloadingRef.current = true;
     setError('');
     try {
-      const [summaryData, userData, videoData, playlistData, comparisonData] = await Promise.all([
+      const [summaryData, userData, videoData, playlistData] = await Promise.all([
         api('/api/admin/summary'),
         api('/api/admin/users'),
         api('/api/admin/videos'),
         api('/api/playlists'),
-        api('/api/admin/analytics/comparison'),
       ]);
       setSummary(summaryData);
       setUsers(userData.users);
       setVideos(videoData.videos);
       setPlaylists(playlistData.playlists);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      coreReloadingRef.current = false;
+    }
+  }, []);
+
+  const reloadComparison = useCallback(async () => {
+    setComparisonLoading(true);
+    try {
+      const comparisonData = await api('/api/admin/analytics/comparison');
       setComparison(comparisonData);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setComparisonLoading(false);
     }
   }, []);
+
+  const reload = useCallback(async () => {
+    await reloadCore();
+    reloadComparison();
+  }, [reloadCore, reloadComparison]);
 
   useEffect(() => {
     reload();
@@ -40,16 +61,16 @@ export function useAdminData() {
     let timer;
     const onAdminUpdate = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => reload(), 800);
+      timer = setTimeout(() => reloadCore(), 3000);
     };
     socket.on('admin:metrics:update', onAdminUpdate);
     return () => {
       clearTimeout(timer);
       socket.off('admin:metrics:update', onAdminUpdate);
     };
-  }, [socket, reload]);
+  }, [socket, reloadCore]);
 
-  return { summary, users, videos, playlists, comparison, error, reload };
+  return { summary, users, videos, playlists, comparison, comparisonLoading, error, reload, reloadComparison };
 }
 
 export function useAdminUserDetail(userId) {
