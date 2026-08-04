@@ -20,6 +20,9 @@ export function SocketProvider({ children }) {
     const instance = io(API_URL.origin, {
       path: SOCKET_PATH,
       auth: { token: auth.token },
+      transports: ['websocket'],
+      upgrade: false,
+      withCredentials: true,
     });
     instance.on('connect', () => setConnected(true));
     instance.on('disconnect', () => setConnected(false));
