@@ -72,7 +72,6 @@ export function useLeaderboard() {
 
 export function useVideoHeatmap(videoId) {
   const [heatmap, setHeatmap] = useState(null);
-  const { socket } = useSocket();
 
   const reload = useCallback(async () => {
     if (!videoId) {
@@ -86,13 +85,6 @@ export function useVideoHeatmap(videoId) {
   useEffect(() => {
     reload().catch(() => setHeatmap(null));
   }, [reload]);
-
-  useEffect(() => {
-    if (!socket || !videoId) return undefined;
-    const onUpdate = () => reload().catch(() => {});
-    socket.on('metrics:update', onUpdate);
-    return () => socket.off('metrics:update', onUpdate);
-  }, [socket, videoId, reload]);
 
   return { heatmap, setHeatmap, reload };
 }

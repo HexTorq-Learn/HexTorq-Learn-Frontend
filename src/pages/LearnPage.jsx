@@ -15,8 +15,8 @@ export default function LearnPage() {
   const { videoId } = useParams();
   const navigate = useNavigate();
   const { videos, loading } = useVideos();
-  const { overview, timeMap, reload: reloadOverview, setOverview, setTimeMap } = useAnalyticsOverview();
-  const { advanced, setAdvanced, reload: reloadAdvanced } = useAdvancedMetrics();
+  const { overview, timeMap, setOverview, setTimeMap } = useAnalyticsOverview();
+  const { advanced, setAdvanced } = useAdvancedMetrics();
 
   const selectedVideo = videos.find((video) => video.id === videoId) || null;
   const { heatmap, setHeatmap } = useVideoHeatmap(selectedVideo?.id);
@@ -40,8 +40,8 @@ export default function LearnPage() {
   });
 
   function handleFlush() {
-    reloadOverview().catch(() => {});
-    reloadAdvanced().catch(() => {});
+    // Realtime socket updates and local metric patches keep this page fresh.
+    // Avoid polling heavy analytics endpoints every 5 seconds while video tracking is active.
   }
 
   if (!loading && !videos.length) {
