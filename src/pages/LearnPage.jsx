@@ -16,7 +16,7 @@ export default function LearnPage() {
   const navigate = useNavigate();
   const { videos, loading } = useVideos();
   const { overview, timeMap, setOverview, setTimeMap } = useAnalyticsOverview();
-  const { advanced, setAdvanced } = useAdvancedMetrics();
+  const { advanced, setAdvanced } = useAdvancedMetrics({ autoLoad: false });
 
   const selectedVideo = videos.find((video) => video.id === videoId) || null;
   const { heatmap, setHeatmap } = useVideoHeatmap(selectedVideo?.id);

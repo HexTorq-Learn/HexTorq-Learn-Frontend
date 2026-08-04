@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../providers/AuthProvider.jsx';
 import { useSocket } from '../providers/SocketProvider.jsx';
@@ -8,15 +8,24 @@ export function useAnalyticsOverview() {
   const { socket } = useSocket();
   const [overview, setOverview] = useState(null);
   const [timeMap, setTimeMap] = useState(null);
+  const pendingRef = useRef(null);
 
   const reload = useCallback(async () => {
     if (!auth) return;
-    const [overviewData, mapData] = await Promise.all([
-      api('/api/analytics/overview'),
-      api('/api/analytics/time-map'),
-    ]);
-    setOverview(overviewData);
-    setTimeMap(mapData);
+    if (!pendingRef.current) {
+      pendingRef.current = Promise.all([
+        api('/api/analytics/overview'),
+        api('/api/analytics/time-map'),
+      ])
+        .then(([overviewData, mapData]) => {
+          setOverview(overviewData);
+          setTimeMap(mapData);
+        })
+        .finally(() => {
+          pendingRef.current = null;
+        });
+    }
+    return pendingRef.current;
   }, [auth]);
 
   useEffect(() => {
@@ -36,19 +45,29 @@ export function useAnalyticsOverview() {
   return { overview, timeMap, reload, setOverview, setTimeMap };
 }
 
-export function useAdvancedMetrics() {
+export function useAdvancedMetrics({ autoLoad = true } = {}) {
   const { auth } = useAuth();
   const [advanced, setAdvanced] = useState(null);
+  const pendingRef = useRef(null);
 
   const reload = useCallback(async () => {
     if (!auth) return;
-    const data = await api('/api/analytics/advanced');
-    setAdvanced(data);
+    if (!pendingRef.current) {
+      pendingRef.current = api('/api/analytics/advanced')
+        .then((data) => {
+          setAdvanced(data);
+        })
+        .finally(() => {
+          pendingRef.current = null;
+        });
+    }
+    return pendingRef.current;
   }, [auth]);
 
   useEffect(() => {
+    if (!autoLoad) return;
     reload().catch(() => {});
-  }, [reload]);
+  }, [autoLoad, reload]);
 
   return { advanced, setAdvanced, reload };
 }
