@@ -1,4 +1,5 @@
 import { useOutletContext } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Activity, BarChart3, Clock, Folder, Shield, Users } from 'lucide-react';
 import { Stat } from '../../components/ui/Stat.jsx';
 import { formatTime } from '../../lib/youtube.js';
@@ -9,7 +10,11 @@ import { CohortRetentionChart } from '../../components/admin/CohortRetentionChar
 import { RiskUserTable } from '../../components/admin/RiskUserTable.jsx';
 
 export default function AdminAnalyticsPage() {
-  const { comparison, comparisonLoading } = useOutletContext();
+  const { comparison, comparisonLoading, ensureComparison } = useOutletContext();
+
+  useEffect(() => {
+    ensureComparison();
+  }, [ensureComparison]);
   const comparisonRows = comparison?.userComparison || [];
   const dailyRows = comparison?.charts?.dailyActiveLearners || [];
   const totalStudyRows = comparison?.charts?.totalStudyTimeByDay || [];

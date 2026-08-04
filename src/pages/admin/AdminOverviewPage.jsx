@@ -1,4 +1,5 @@
 import { useOutletContext } from 'react-router-dom';
+import { useEffect } from 'react';
 import { BarChart3, Clock, Folder, ListVideo, Shield, Users } from 'lucide-react';
 import { Stat } from '../../components/ui/Stat.jsx';
 import { MetricCard } from '../../components/ui/MetricCard.jsx';
@@ -7,7 +8,11 @@ import { AdminHourHeatmap } from '../../components/admin/AdminHourHeatmap.jsx';
 import { LeaderboardChart } from '../../components/admin/LeaderboardChart.jsx';
 
 export default function AdminOverviewPage() {
-  const { summary, users, videos, comparison } = useOutletContext();
+  const { summary, users, videos, comparison, comparisonLoading, reloadOverview } = useOutletContext();
+
+  useEffect(() => {
+    reloadOverview();
+  }, [reloadOverview]);
 
   return (
     <>
@@ -30,6 +35,7 @@ export default function AdminOverviewPage() {
       </div>
 
       <div className="analytics-grid wide">
+        {comparisonLoading && !comparison && <p className="muted">Loading leaderboard charts...</p>}
         <LeaderboardChart
           title="Active study leaderboard"
           rows={comparison?.leaderboards?.byActiveStudy || []}
