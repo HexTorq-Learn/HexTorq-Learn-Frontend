@@ -3,6 +3,7 @@ import { LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../providers/AuthProvider.jsx';
 import { useAdminData } from '../../hooks/useAdmin.js';
 import { ThemeToggle } from '../ui/ThemeToggle.jsx';
+import { NotificationBell } from '../ui/NotificationBell.jsx';
 
 const TABS = [
   { to: '/admin/overview', label: 'overview' },
@@ -10,6 +11,7 @@ const TABS = [
   { to: '/admin/playlists', label: 'playlists' },
   { to: '/admin/videos', label: 'videos' },
   { to: '/admin/analytics', label: 'analytics' },
+  { to: '/admin/content', label: 'content' },
 ];
 
 export function AdminShell() {
@@ -40,6 +42,7 @@ export function AdminShell() {
           ))}
         </nav>
         <div className="admin-actions">
+          <NotificationBell />
           <ThemeToggle />
           <button className="small-button" onClick={() => navigate('/learn')}>Learner</button>
           <button className="logout" onClick={onLogout}><LogOut size={16} /> Logout</button>

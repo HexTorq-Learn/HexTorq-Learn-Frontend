@@ -5,6 +5,7 @@ import {
 import { useAuth } from '../../providers/AuthProvider.jsx';
 import { useVideos } from '../../hooks/useVideos.js';
 import { ThemeToggle } from '../ui/ThemeToggle.jsx';
+import { NotificationBell } from '../ui/NotificationBell.jsx';
 
 export function Sidebar() {
   const { auth, logout } = useAuth();
@@ -83,6 +84,7 @@ export function Sidebar() {
             <Shield size={16} />Admin
           </button>
         )}
+        <NotificationBell />
         <ThemeToggle />
         <button className="logout" onClick={onLogout}><LogOut size={16} /><span>Logout</span></button>
       </div>

@@ -46,6 +46,7 @@ const AdminPlaylistsPage = lazyWithReload(() => import('./pages/admin/AdminPlayl
 const AdminVideosPage = lazyWithReload(() => import('./pages/admin/AdminVideosPage.jsx'));
 const AdminAnalyticsPage = lazyWithReload(() => import('./pages/admin/AdminAnalyticsPage.jsx'));
 const AdminUserDetailPage = lazyWithReload(() => import('./pages/admin/AdminUserDetailPage.jsx'));
+const AdminContentInsightsPage = lazyWithReload(() => import('./pages/admin/AdminContentInsightsPage.jsx'));
 
 function withSuspense(element) {
   return <Suspense fallback={<p className="muted">Loading...</p>}>{element}</Suspense>;
@@ -87,6 +88,7 @@ export const router = createBrowserRouter([
               { path: 'playlists', element: withSuspense(<AdminPlaylistsPage />) },
               { path: 'videos', element: withSuspense(<AdminVideosPage />) },
               { path: 'analytics', element: withSuspense(<AdminAnalyticsPage />) },
+              { path: 'content', element: withSuspense(<AdminContentInsightsPage />) },
             ],
           },
         ],

@@ -12,6 +12,7 @@ import { PlaylistProgressChart } from '../charts/2d/PlaylistProgressChart.jsx';
 import { StreakCalendarHeatmap } from '../charts/echarts/StreakCalendarHeatmap.jsx';
 import { DifficultyScatter3D } from '../charts/echarts/DifficultyScatter3D.jsx';
 import { GameDashboard } from '../gamification/GameDashboard.jsx';
+import { PortalActivityPanel } from './PortalActivityPanel.jsx';
 
 export function AdvancedAnalytics({ advanced }) {
   if (!advanced) return null;
@@ -26,6 +27,8 @@ export function AdvancedAnalytics({ advanced }) {
         <div className="panel-title"><Shield size={18} /><h3>Game profile</h3></div>
         <GameDashboard game={advanced.game} />
       </div>
+
+      <PortalActivityPanel portalActivity={advanced.portalActivity} />
 
       <div className="analytics-grid wide">
         <div className="panel">

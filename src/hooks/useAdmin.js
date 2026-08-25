@@ -9,6 +9,8 @@ export function useAdminData() {
   const [playlists, setPlaylists] = useState([]);
   const [comparison, setComparison] = useState(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [contentInsights, setContentInsights] = useState(null);
+  const [contentInsightsLoading, setContentInsightsLoading] = useState(false);
   const [error, setError] = useState('');
   const { socket } = useSocket();
   const loadingRef = useRef({});
@@ -18,6 +20,7 @@ export function useAdminData() {
     videos: false,
     playlists: false,
     comparison: false,
+    contentInsights: false,
   });
 
   const runOnce = useCallback(async (key, force, task) => {
@@ -136,6 +139,25 @@ export function useAdminData() {
     setComparisonLoading(false);
   }, [runOnce]);
 
+  const reloadContentInsights = useCallback(async () => {
+    setContentInsightsLoading(true);
+    await runOnce('contentInsights', true, async () => {
+      const data = await api('/api/admin/analytics/content-insights');
+      setContentInsights(data);
+    });
+    setContentInsightsLoading(false);
+  }, [runOnce]);
+
+  const ensureContentInsights = useCallback(async () => {
+    if (loadedRef.current.contentInsights) return;
+    setContentInsightsLoading(true);
+    await runOnce('contentInsights', false, async () => {
+      const data = await api('/api/admin/analytics/content-insights');
+      setContentInsights(data);
+    });
+    setContentInsightsLoading(false);
+  }, [runOnce]);
+
   const reload = useCallback(async () => {
     await reloadCore();
     reloadComparison();
@@ -186,6 +208,10 @@ export function useAdminData() {
     ensurePlaylistsPage,
     reloadComparison,
     ensureComparison,
+    contentInsights,
+    contentInsightsLoading,
+    reloadContentInsights,
+    ensureContentInsights,
   };
 }
 

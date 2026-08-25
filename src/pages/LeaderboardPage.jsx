@@ -4,6 +4,7 @@ import { useAuth } from '../providers/AuthProvider.jsx';
 import { useLeaderboard } from '../hooks/useAnalytics.js';
 import { LeaderboardScene3D } from '../components/charts/three/LeaderboardScene3D.jsx';
 import { LeaderboardTable } from '../components/gamification/LeaderboardTable.jsx';
+import { PortalActivityLeaderboard } from '../components/gamification/PortalActivityLeaderboard.jsx';
 import { formatTime } from '../lib/youtube.js';
 
 export default function LeaderboardPage() {
@@ -46,10 +47,14 @@ export default function LeaderboardPage() {
           <p className="muted" style={{ margin: '0.4rem 0 0' }}>
             Lv {selected.level} · {selected.role} · {selected.xp} XP · {selected.badgeCount} badges ·{' '}
             {formatTime(selected.activeStudySeconds)} studied · {selected.completionRatePercent}% completion ·{' '}
-            {selected.playlistProgressPercent}% playlist progress
+            {selected.playlistProgressPercent}% playlist progress · {formatTime(selected.portalActiveSeconds || 0)} in portal ·{' '}
+            {selected.onlineStatus === 'online' ? 'online now' : 'offline'}
           </p>
         </div>
       )}
+      <div style={{ marginTop: '1rem' }}>
+        <PortalActivityLeaderboard rows={leaderboard} currentUserId={auth?.user?.id} />
+      </div>
       <div style={{ marginTop: '1rem' }}>
         <LeaderboardTable rows={restRows} currentUserId={auth?.user?.id} startRank={11} />
       </div>
